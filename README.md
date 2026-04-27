@@ -4,9 +4,11 @@
 
 A single-page personal budgeting and forecasting app. Plan up to 36 months ahead, model income at any cadence (including bi-weekly), see where every dollar goes, and round-trip your full state through an Excel workbook so the spreadsheet itself is a portable backup.
 
-Part of the [Observation Deck](https://observation-deck.netlify.app/) family of personal-finance tools.
+Part of the [Observation Deck](https://observation-deck.netlify.app/) family of personal tools.
 
 No build step, no backend, no account sign-up — open `index.html` and start budgeting. Your data lives in your browser's LocalStorage and travels with you via the workbook you export.
+
+A **[Getting Started guide](guide.html)** is built into the app (linked in the header) and covers every feature in depth — accounts, transaction frequencies, the forecast grid, charts, insight cards, and pro tips.
 
 ---
 
@@ -140,7 +142,7 @@ The app migrates older data forward automatically. You don't need to do anything
 
 ## Contributing
 
-Single-file project. Edit `index.html` and refresh the browser. Sample run:
+Two-file project. Edit `index.html` (the app) or `guide.html` (the Getting Started guide) and refresh the browser. Sample run:
 
 ```bash
 # Local preview (any static server works)

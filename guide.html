@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Getting Started — Cashflow Compass</title>
+<style>
+/* ── Theme variables (mirrors index.html) ── */
+:root {
+    --primary:      #16a34a;
+    --primary-dark: #15803d;
+    --danger:       #dc2626;
+    --warning:      #d97706;
+    --success:      #16a34a;
+    --blue:         #2563eb;
+    --purple:       #7c3aed;
+    --bg:           #f1f5f9;
+    --card:         #ffffff;
+    --card-alt:     #f8fafc;
+    --text:         #1e293b;
+    --muted:        #64748b;
+    --border:       #e2e8f0;
+    --shadow:       0 1px 4px rgba(0,0,0,0.08);
+    --radius:       10px;
+}
+body.dark {
+    --bg:       #0f1117;
+    --card:     #1a1f27;
+    --card-alt: #232932;
+    --text:     #e2e8f0;
+    --muted:    #94a3b8;
+    --border:   #2d3748;
+    --shadow:   0 1px 6px rgba(0,0,0,0.4);
+}
+
+/* ── Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    font-size: 15px;
+    transition: background 0.2s, color 0.2s;
+}
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1, h2, h3, h4 { line-height: 1.3; font-weight: 700; }
+p { margin-bottom: 0.75em; }
+p:last-child { margin-bottom: 0; }
+ul, ol { padding-left: 1.4em; margin-bottom: 0.75em; }
+li { margin-bottom: 0.3em; }
+strong { font-weight: 600; }
+code {
+    background: var(--card-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 13px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* ── Layout ── */
+.page-wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 20px 60px;
+}
+
+/* ── Nav bar ── */
+.guide-nav {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    padding: 12px 20px;
+}
+.guide-nav-inner {
+    max-width: 860px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 7px;
+    padding: 7px 14px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+.back-btn:hover { background: var(--primary-dark); text-decoration: none; }
+.nav-title {
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--muted);
+}
+.nav-spacer { flex: 1; }
+
+/* ── Hero ── */
+.guide-hero {
+    padding: 48px 0 36px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 48px;
+}
+.guide-hero h1 {
+    font-size: 2rem;
+    color: var(--primary);
+    margin-bottom: 10px;
+}
+.guide-hero .subtitle {
+    font-size: 1.05rem;
+    color: var(--muted);
+    max-width: 600px;
+}
+
+/* ── Table of contents ── */
+.toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--primary);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 48px;
+}
+.toc h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 12px; }
+.toc ol { margin: 0; padding-left: 1.3em; }
+.toc li { margin-bottom: 4px; font-size: 14px; }
+.toc a { color: var(--primary); font-weight: 500; }
+
+/* ── Guide sections ── */
+.guide-section {
+    margin-bottom: 56px;
+}
+.guide-section h2 {
+    font-size: 1.45rem;
+    color: var(--text);
+    margin-bottom: 6px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.section-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+.guide-section h3 {
+    font-size: 1.05rem;
+    color: var(--text);
+    margin: 24px 0 8px;
+}
+.guide-section > p,
+.guide-section > ul,
+.guide-section > ol {
+    margin-top: 12px;
+}
+
+/* ── Step cards ── */
+.steps {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 16px;
+}
+.step-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    box-shadow: var(--shadow);
+}
+.step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+.step-body h4 { font-size: 14.5px; margin-bottom: 4px; }
+.step-body p { font-size: 13.5px; color: var(--muted); margin: 0; }
+
+/* ── Callout boxes ── */
+.callout {
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 13.5px;
+    border-left: 4px solid;
+}
+.callout.tip   { background: rgba(22,163,74,0.07);  border-color: var(--success); }
+.callout.note  { background: rgba(37,99,235,0.07);  border-color: var(--blue); }
+.callout.warn  { background: rgba(217,119,6,0.09);  border-color: var(--warning); }
+.callout-label {
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+}
+.callout.tip  .callout-label { color: var(--success); }
+.callout.note .callout-label { color: var(--blue); }
+.callout.warn .callout-label { color: var(--warning); }
+
+/* ── Data tables ── */
+.guide-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 13.5px;
+    background: var(--card);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+.guide-table th {
+    background: var(--card-alt);
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+}
+.guide-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+.guide-table tr:last-child td { border-bottom: none; }
+.guide-table tr:hover td { background: var(--card-alt); }
+
+/* ── Frequency grid ── */
+.freq-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 12px;
+    margin: 16px 0;
+}
+.freq-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+}
+.freq-card .freq-name {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 4px;
+    color: var(--primary);
+}
+.freq-card .freq-detail {
+    font-size: 12.5px;
+    color: var(--muted);
+}
+
+/* ── Insight cards ── */
+.insight-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 16px;
+}
+.insight-row {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid;
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    box-shadow: var(--shadow);
+}
+.insight-row.positive { border-left-color: var(--success); }
+.insight-row.info     { border-left-color: var(--blue); }
+.insight-row.fact     { border-left-color: var(--purple); }
+.insight-row.warning  { border-left-color: var(--warning); }
+.insight-row .ins-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 5px;
+}
+.ins-num {
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--card-alt);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--muted);
+}
+.insight-row h4 { font-size: 14px; margin: 0; }
+.insight-row p { font-size: 13px; color: var(--muted); margin: 0; }
+
+/* ── Chart grid ── */
+.chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+    margin-top: 16px;
+}
+.chart-desc-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+}
+.chart-desc-card .chart-name {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--blue);
+    margin-bottom: 6px;
+}
+.chart-desc-card p { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+.chart-desc-card .chart-action {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+/* ── Pro tips ── */
+.tips-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+    margin-top: 16px;
+}
+.tip-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+}
+.tip-card .tip-icon {
+    font-size: 22px;
+    margin-bottom: 8px;
+    display: block;
+}
+.tip-card h4 { font-size: 14px; margin-bottom: 5px; }
+.tip-card p { font-size: 13px; color: var(--muted); margin: 0; }
+
+/* ── Footer ── */
+.guide-foot {
+    text-align: center;
+    padding: 24px 0 0;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 60px;
+}
+.guide-foot a { color: var(--blue); text-decoration: none; }
+.guide-foot a:hover { text-decoration: underline; }
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+    .guide-hero h1 { font-size: 1.5rem; }
+    .freq-grid, .chart-grid, .tips-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Nav bar -->
+<nav class="guide-nav">
+    <div class="guide-nav-inner">
+        <a href="index.html" class="back-btn">← Back to App</a>
+        <span class="nav-title">🧭 Cashflow Compass — Getting Started</span>
+    </div>
+</nav>
+
+<div class="page-wrap">
+
+<!-- Hero -->
+<div class="guide-hero">
+    <h1>Getting Started</h1>
+    <p class="subtitle">Everything you need to go from a blank slate to a full 12-month forecast — and understand every number on the way.</p>
+</div>
+
+<!-- Table of contents -->
+<div class="toc">
+    <h3>Contents</h3>
+    <ol>
+        <li><a href="#what-is">What is Cashflow Compass?</a></li>
+        <li><a href="#first-10">Your First 10 Minutes</a></li>
+        <li><a href="#accounts">Accounts</a></li>
+        <li><a href="#transactions">Transactions &amp; Frequencies</a></li>
+        <li><a href="#forecast">The Forecast Grid</a></li>
+        <li><a href="#charts">Charts</a></li>
+        <li><a href="#insights">Insight Cards</a></li>
+        <li><a href="#export">Excel &amp; JSON Export / Import</a></li>
+        <li><a href="#tips">Pro Tips</a></li>
+    </ol>
+</div>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 1. What is Cashflow Compass? -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="what-is">
+    <h2><span class="section-num">1</span> What is Cashflow Compass?</h2>
+
+    <p>Cashflow Compass is a personal budgeting and forecasting tool that answers one question: <strong>given what you earn and spend today, what does your financial picture look like over the next 36 months?</strong></p>
+
+    <p>Unlike a spreadsheet you maintain manually, the app models every recurring transaction — your bi-weekly paycheck, monthly rent, annual insurance renewal — and projects them forward automatically. You set things up once and the forecast, charts, and insights update in real time.</p>
+
+    <div class="callout note">
+        <div class="callout-label">How it works</div>
+        All data is stored in your browser's LocalStorage — nothing is sent anywhere. You can export the full state to an Excel workbook or JSON file at any time as a portable backup, and re-import it later to pick up exactly where you left off.
+    </div>
+
+    <h3>What it's great for</h3>
+    <ul>
+        <li>Seeing whether your monthly net cash flow is positive or negative before it becomes a problem</li>
+        <li>Planning for irregular windfalls — like the two extra "3-paycheck months" you get with bi-weekly pay</li>
+        <li>Stress-testing scenarios: what happens if rent goes up 5% at renewal? What if you cut dining out?</li>
+        <li>Building a backup budget you can open in Excel, edit, and re-import</li>
+    </ul>
+
+    <h3>What it doesn't do (yet)</h3>
+    <ul>
+        <li>Connect to your bank — all data is entered manually</li>
+        <li>Track actual spending vs. budget — this is a forward-looking planner, not a transaction tracker</li>
+        <li>Calculate debt payoff schedules (on the roadmap)</li>
+    </ul>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 2. Your First 10 Minutes -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="first-10">
+    <h2><span class="section-num">2</span> Your First 10 Minutes</h2>
+
+    <p>Follow these five steps and you'll have a working forecast in under 10 minutes.</p>
+
+    <div class="steps">
+        <div class="step-card">
+            <span class="step-num">1</span>
+            <div class="step-body">
+                <h4>Add at least one account</h4>
+                <p>Go to the <strong>Accounts</strong> section and add a checking account with its current balance and today's date as the "as of" date. This is the starting point every projection builds from. Add savings, credit cards, or investments if you want the full net worth picture.</p>
+            </div>
+        </div>
+        <div class="step-card">
+            <span class="step-num">2</span>
+            <div class="step-body">
+                <h4>Add your income first</h4>
+                <p>In <strong>Transactions</strong>, add your paycheck as an <strong>Income</strong> transaction. If you're paid bi-weekly, select <em>Bi-weekly</em> — the app will automatically model the two "3-paycheck months" per year. Enter the amount as your <strong>net take-home pay</strong> after taxes, since everything else is post-tax too.</p>
+            </div>
+        </div>
+        <div class="step-card">
+            <span class="step-num">3</span>
+            <div class="step-body">
+                <h4>Add your fixed expenses</h4>
+                <p>Rent/mortgage, car payment, phone bill, internet, insurance — these are the same every month (or year). Add them as <strong>Expense</strong> transactions under the appropriate category. For rent with a known renewal, set an <strong>Annual Escalation %</strong> to model the increase automatically.</p>
+            </div>
+        </div>
+        <div class="step-card">
+            <span class="step-num">4</span>
+            <div class="step-body">
+                <h4>Add your variable expenses</h4>
+                <p>Groceries, gas, dining out, entertainment — use your real average monthly spend, not a wishful number. You can always adjust later. These fill in the <em>Variable</em> and <em>Discretionary</em> categories in the forecast grid.</p>
+            </div>
+        </div>
+        <div class="step-card">
+            <span class="step-num">5</span>
+            <div class="step-body">
+                <h4>Choose your horizon and review</h4>
+                <p>Use the dropdown at the top right to pick <strong>End of Year</strong>, <strong>12</strong>, <strong>18</strong>, <strong>24</strong>, or <strong>36 months</strong>. Scroll down to the forecast grid — red cells flag months where the balance goes negative. Check the Insight cards for your savings rate, biggest spending category, and projected end balance.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="callout tip">
+        <div class="callout-label">Tip — Start with the sample data</div>
+        If the app is empty, the welcome banner offers a <strong>Load sample data</strong> button. It sets up two accounts and 13 realistic transactions so you can see the full forecast immediately. Edit or delete any transaction to replace it with your own numbers.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 3. Accounts -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="accounts">
+    <h2><span class="section-num">3</span> Accounts</h2>
+
+    <p>Accounts serve one purpose: they set the <strong>starting balance</strong> that the forecast builds from. Every month, the projected net cash flow is added to the running balance, and you can see exactly when and why you might dip into (or out of) savings.</p>
+
+    <table class="guide-table">
+        <thead>
+            <tr><th>Account type</th><th>How the balance is treated</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>Checking</strong></td><td>Starting balance added to net worth — the primary account for most forecasts</td></tr>
+            <tr><td><strong>Savings</strong></td><td>Added to net worth — good for modeling an emergency fund or sinking fund</td></tr>
+            <tr><td><strong>Credit Card</strong></td><td><em>Subtracted</em> from net worth (it's a liability) — enter the balance as a positive number</td></tr>
+            <tr><td><strong>Investment</strong></td><td>Added to net worth — useful for seeing total picture including a brokerage account</td></tr>
+            <tr><td><strong>Cash</strong></td><td>Added to net worth — for cash on hand you want to include</td></tr>
+        </tbody>
+    </table>
+
+    <h3>The "As of" date</h3>
+    <p>This tells the app when that balance was accurate. Use today's date if you just checked your account. The forecast counts forward from your transaction start dates, so the as-of date anchors the starting point correctly even if you set things up mid-month.</p>
+
+    <div class="callout note">
+        <div class="callout-label">Note — Multiple accounts</div>
+        You can add as many accounts as you like. The forecast combines all of them into a single running net balance. If you want to track a savings account separately, add a <em>Transfer</em> transaction from checking to savings each month — it won't count as an expense or income, just a movement between accounts.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 4. Transactions & Frequencies -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="transactions">
+    <h2><span class="section-num">4</span> Transactions &amp; Frequencies</h2>
+
+    <p>Transactions are the heart of the app. Each one represents a real recurring (or one-time) cash flow — a paycheck, a subscription, a car insurance renewal. The app supports nine frequency types so you can model virtually any real-world payment schedule.</p>
+
+    <div class="freq-grid">
+        <div class="freq-card">
+            <div class="freq-name">One-time</div>
+            <div class="freq-detail">Hits on a single date. Good for car repairs, a large purchase, a tax payment, or a bonus.</div>
+        </div>
+        <div class="freq-card">
+            <div class="freq-name">Weekly</div>
+            <div class="freq-detail">Every 7 days from the start date. ~52 occurrences per year.</div>
+        </div>
+        <div class="freq-card">
+            <div class="freq-name">Bi-weekly ⭐</div>
+            <div class="freq-detail">Every 14 days — exactly 26 paychecks per year. Correctly models the 2 "3-paycheck months" most people don't plan for.</div>
+        </div>
+        <div class="freq-card">
+            <div class="freq-name">Semi-monthly</div>
+            <div class="freq-detail">Twice a month on the 1st and 15th. 24 occurrences per year. Common for some salaried roles.</div>
+        </div>
+        <div class="freq-card">
+            <div class="freq-name">Monthly</div>
+            <div class="freq-detail">Same day each month. The most common frequency — rent, utilities, subscriptions, loan payments.</div>
+        </div>
+        <div class="freq-card">
+            <div class="freq-name">Quarterly</div>
+            <div class="freq-detail">Every 3 months. Good for estimated taxes, quarterly dividends, or HOA fees.</div>
+        </div>
+        <div class="freq-card">
+            <div class="freq-name">Semi-annual</div>
+            <div class="freq-detail">Twice a year. Some insurance policies and property tax bills land this way.</div>
+        </div>
+        <div class="freq-card">
+            <div class="freq-name">Annual</div>
+            <div class="freq-detail">Once a year. Car insurance, Amazon Prime, domain renewals, annual memberships.</div>
+        </div>
+        <div class="freq-card">
+            <div class="freq-name">Custom</div>
+            <div class="freq-detail">Every N days, weeks, or months. For anything that doesn't fit a standard cadence.</div>
+        </div>
+    </div>
+
+    <h3>Bi-weekly and the 3-paycheck month</h3>
+    <p>Most salaried workers paid bi-weekly notice that two months a year have three pay deposits instead of two. With 26 paychecks spread over 12 months, two months end up with an "extra" paycheck — a significant windfall if you plan for it. Cashflow Compass detects these months automatically and flags them in the Insights panel so you can decide in advance what to do with the extra cash.</p>
+
+    <div class="callout tip">
+        <div class="callout-label">Tip — Enter net (take-home) pay</div>
+        Enter your paycheck amount as <strong>what lands in your bank account</strong> after all pre-tax deductions (401k, health insurance, federal and state withholding). Since all expenses in the app are post-tax, mixing gross income with post-tax expenses will make the forecast look falsely negative.
+    </div>
+
+    <h3>Annual escalation %</h3>
+    <p>For transactions that grow over time — rent renewals, cost-of-living raises, utility creep — set an escalation percentage. The amount automatically increases by that % each year from the start date. A 5% escalation on a $900 rent makes it $945 in year 2, $992 in year 3, and so on.</p>
+
+    <h3>Pause / resume</h3>
+    <p>Use the pause toggle on any transaction to temporarily suspend it without deleting it. This is useful for gym memberships you've cancelled (but plan to restart), freelance income that stopped, or seasonal expenses that are off right now.</p>
+
+    <h3>Tags and notes</h3>
+    <p>Tags let you group transactions that cut across categories — for example, <code>work-reimbursable</code>, <code>kid</code>, or <code>shared</code>. Notes are free-text reminders attached to a transaction ("Lease renews in August", "Cancel before trial ends").</p>
+
+    <h3>End date</h3>
+    <p>Set an end date on any transaction to stop it from appearing in the forecast after a certain point. Perfect for a fixed-term loan payoff, a sublease, or a promotional subscription price that expires.</p>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 5. The Forecast Grid -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="forecast">
+    <h2><span class="section-num">5</span> The Forecast Grid</h2>
+
+    <p>The forecast grid is a month-by-month projection table. Rows are your transactions grouped by category kind; columns are the months in your chosen horizon.</p>
+
+    <table class="guide-table">
+        <thead>
+            <tr><th>Row group</th><th>What it contains</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>Income</strong></td><td>All income transactions — paychecks, side income, rental income</td></tr>
+            <tr><td><strong>Fixed</strong></td><td>Predictable, recurring expenses. Monthly subscriptions appear first (largest first), then annual ones, then everything else</td></tr>
+            <tr><td><strong>Variable</strong></td><td>Expenses that recur but fluctuate — groceries, gas, utilities</td></tr>
+            <tr><td><strong>Discretionary</strong></td><td>Lifestyle spending — dining out, entertainment, travel</td></tr>
+            <tr><td><strong>Savings</strong></td><td>Savings contributions and sinking funds — vacation fund, emergency fund top-up</td></tr>
+            <tr><td><strong>Debt</strong></td><td>Loan and credit card payments</td></tr>
+            <tr><td><strong>Tax</strong></td><td>Estimated tax payments and tax-related expenses</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Summary rows</h3>
+    <p>Below all the transactions, four summary rows appear for every month:</p>
+    <ul>
+        <li><strong>Total Income</strong> — all income for that month</li>
+        <li><strong>Total Expenses</strong> — all outflows combined</li>
+        <li><strong>Net Cash Flow</strong> — income minus expenses (green = positive, red = negative)</li>
+        <li><strong>End-of-Month Balance</strong> — running cumulative balance; turns red if it goes negative</li>
+    </ul>
+
+    <div class="callout warn">
+        <div class="callout-label">Watch out</div>
+        A red End-of-Month Balance means your projected balance goes negative — you'd need to dip into savings or credit to cover that month. Look for the transaction causing the spike (often an annual expense) and either plan a buffer or adjust the timing.
+    </div>
+
+    <h3>Choosing your horizon</h3>
+    <p>The global horizon dropdown in the top-right changes the forecast length for the grid and all charts simultaneously. Options are <strong>End of Year</strong> (remaining months in the current calendar year), <strong>12</strong>, <strong>18</strong>, <strong>24</strong>, and <strong>36 months</strong>. Each chart can also be set to its own independent horizon — see the Charts section.</p>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 6. Charts -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="charts">
+    <h2><span class="section-num">6</span> Charts</h2>
+
+    <p>Six charts visualize your forecast from different angles. Every chart has its own horizon dropdown — you can keep most on the global setting and override one or two for a deeper look without affecting the rest of the page.</p>
+
+    <div class="chart-grid">
+        <div class="chart-desc-card">
+            <div class="chart-name">📊 Monthly Income vs Expenses</div>
+            <p>Side-by-side bars for each month's total income and total expenses, with a net cash-flow line overlay. The quickest way to spot months where spending overtakes income.</p>
+            <div class="chart-action">Look for: bars where expenses exceed income height</div>
+        </div>
+        <div class="chart-desc-card">
+            <div class="chart-name">📈 Running Balance</div>
+            <p>Area chart of your projected account balance month by month. Shows the trajectory of your financial position — are you building a cushion or drawing one down?</p>
+            <div class="chart-action">Look for: dips toward or below zero</div>
+        </div>
+        <div class="chart-desc-card">
+            <div class="chart-name">🍩 Spend by Category</div>
+            <p>Doughnut chart breaking down total expenses by category over the horizon. Instantly answers "where is my money going?" in percentage terms.</p>
+            <div class="chart-action">Look for: categories that surprise you by their share</div>
+        </div>
+        <div class="chart-desc-card">
+            <div class="chart-name">📉 Category Trend</div>
+            <p>Stacked area chart showing how each category's spend evolves over time. Useful for seeing the effect of annual escalations and seasonal expenses building up.</p>
+            <div class="chart-action">Look for: categories growing faster than income</div>
+        </div>
+        <div class="chart-desc-card">
+            <div class="chart-name">🏆 Top 10 Costs</div>
+            <p>Horizontal bar chart of the 10 largest individual line items annualized over the horizon. Hover any bar for the exact dollar amount. Good for identifying the highest-leverage cuts.</p>
+            <div class="chart-action">Look for: items you'd forgotten about or underestimated</div>
+        </div>
+        <div class="chart-desc-card">
+            <div class="chart-name">💰 Income Sources</div>
+            <p>Doughnut breakdown of income by category — useful if you have multiple income streams (salary, freelance, rental, dividends) and want to see your income diversification at a glance.</p>
+            <div class="chart-action">Look for: heavy reliance on a single source</div>
+        </div>
+    </div>
+
+    <div class="callout tip">
+        <div class="callout-label">Tip — Per-chart horizons</div>
+        Set the Running Balance chart to 36 months to see the long arc, while keeping the Income vs Expenses chart on 12 months for month-to-month detail. Each chart remembers its override independently.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 7. Insight Cards -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="insights">
+    <h2><span class="section-num">7</span> Insight Cards</h2>
+
+    <p>The Insights panel auto-generates eight cards from your forecast data. They update instantly when you change transactions or the horizon.</p>
+
+    <div class="insight-list">
+        <div class="insight-row positive">
+            <div class="ins-header">
+                <span class="ins-num">1</span>
+                <h4>Average Savings Rate</h4>
+            </div>
+            <p>The percentage of your total income that isn't consumed by expenses over the horizon. A rate of 20%+ is considered healthy. Below 10% means most income is committed to expenses before it arrives. If this number is negative, expenses exceed income on average.</p>
+        </div>
+        <div class="insight-row fact">
+            <div class="ins-header">
+                <span class="ins-num">2</span>
+                <h4>Biggest Category</h4>
+            </div>
+            <p>The single expense category that consumes the largest share of your total spending over the horizon, shown as a percentage. Housing dominating at 40%+ is normal in high-cost areas; if Dining Out is your biggest category, that's a cue worth noticing.</p>
+        </div>
+        <div class="insight-row fact">
+            <div class="ins-header">
+                <span class="ins-num">3</span>
+                <h4>Annual Subscription Cost</h4>
+            </div>
+            <p>The annualized total of everything in the <em>Subscriptions</em> category — streaming services, software, memberships. The monthly-equivalent is shown beneath. Subscription creep is real; this card makes the full annual number visible in one place.</p>
+        </div>
+        <div class="insight-row info">
+            <div class="ins-header">
+                <span class="ins-num">4</span>
+                <h4>Emergency Fund Coverage</h4>
+            </div>
+            <p>How many months of expenses your starting balance would cover at the current average burn rate. The conventional target is 3–6 months. Green = 6+ months, blue = 3–6, yellow = 1–3, red = less than 1.</p>
+        </div>
+        <div class="insight-row info">
+            <div class="ins-header">
+                <span class="ins-num">5</span>
+                <h4>Days in the Red</h4>
+            </div>
+            <p>A count of forecast days where the projected balance goes negative, plus the lowest point reached. Zero is the target. If any days appear, find the month in the grid where the balance turns red and look for the spike — usually a large annual expense landing without a buffer.</p>
+        </div>
+        <div class="insight-row positive">
+            <div class="ins-header">
+                <span class="ins-num">6</span>
+                <h4>3-Paycheck Months</h4>
+            </div>
+            <p>For bi-weekly income streams, shows which calendar months will have three pay deposits instead of two. This happens twice a year and represents a meaningful windfall — equal to one full extra paycheck. The card flags the specific months so you can plan ahead: extra savings, debt paydown, or a budgeted splurge.</p>
+        </div>
+        <div class="insight-row info">
+            <div class="ins-header">
+                <span class="ins-num">7</span>
+                <h4>What if you cut [Biggest Category] by 20%?</h4>
+            </div>
+            <p>A quick what-if simulation: if you reduced spending in your largest expense category by 20%, how much would you save over the full horizon? This puts a dollar figure on the potential impact of the most high-leverage change you could make.</p>
+        </div>
+        <div class="insight-row positive">
+            <div class="ins-header">
+                <span class="ins-num">8</span>
+                <h4>Projected End Balance</h4>
+            </div>
+            <p>Where your running balance lands at the final month of the chosen horizon, plus the delta from your starting balance. Green means you finish ahead; yellow means you end below where you started. This is the single number that summarizes whether your current trajectory is sustainable.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 8. Excel & JSON Export / Import -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="export">
+    <h2><span class="section-num">8</span> Excel &amp; JSON Export / Import</h2>
+
+    <p>Your data lives in your browser's LocalStorage — it persists between visits on the same browser and device. But LocalStorage can be cleared. Export regularly to keep a portable backup.</p>
+
+    <h3>Excel (⬇ Excel / ⬆ Excel)</h3>
+    <p>The Excel workbook contains five sheets:</p>
+
+    <table class="guide-table">
+        <thead>
+            <tr><th>Sheet</th><th>Contents</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><code>Accounts</code></td><td>All account records — name, type, balance, as-of date</td></tr>
+            <tr><td><code>Categories</code></td><td>All categories — name, kind, color</td></tr>
+            <tr><td><code>Transactions</code></td><td>Every transaction with all fields — frequency, escalation, tags, notes, paused state</td></tr>
+            <tr><td><code>Settings</code></td><td>App settings — currency, horizon, theme, schema version</td></tr>
+            <tr><td><code>Forecast</code></td><td>The rendered projection grid (read-only export reference)</td></tr>
+        </tbody>
+    </table>
+
+    <div class="callout warn">
+        <div class="callout-label">Important — Replace-all import</div>
+        Importing a file — Excel or JSON — <strong>completely replaces</strong> everything in your browser with the contents of the file. A confirmation dialog warns you before anything is overwritten. This is intentional: the file is the source of truth. Always export before importing if you want to preserve current data.
+    </div>
+
+    <p>To edit amounts in Excel and re-import: export → open the <code>Transactions</code> sheet → change any amount, frequency, or date → save → import the file back. Every change ripples through the forecast and charts immediately.</p>
+
+    <h3>JSON ({ JSON } / ⇪ JSON)</h3>
+    <p>A lighter alternative to Excel — a single <code>.json</code> file containing all your state. Useful for quickly transferring data between browsers or devices, or sharing a budget template with someone else. Same replace-all import semantics apply.</p>
+
+    <div class="callout tip">
+        <div class="callout-label">Tip — Regular backups</div>
+        Export to Excel at the end of any session where you've made significant changes. Keep the file in a cloud-synced folder (iCloud, Google Drive, Dropbox) and you'll always have a recoverable copy regardless of browser cache clearing.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 9. Pro Tips -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="tips">
+    <h2><span class="section-num">9</span> Pro Tips</h2>
+
+    <div class="tips-grid">
+        <div class="tip-card">
+            <span class="tip-icon">📅</span>
+            <h4>Plan around 3-paycheck months</h4>
+            <p>When the Insights panel flags a 3-paycheck month, add a one-time transaction in that month — an extra savings deposit, a debt payment, or a planned purchase — so the windfall has a destination before it arrives.</p>
+        </div>
+        <div class="tip-card">
+            <span class="tip-icon">📈</span>
+            <h4>Use escalation on rent and raises</h4>
+            <p>Add an annual escalation % to your rent (5–10% is typical in many markets) and to your paycheck (2–4% COL raise). Over 24–36 months the compounding effect on your forecast becomes very visible.</p>
+        </div>
+        <div class="tip-card">
+            <span class="tip-icon">🔁</span>
+            <h4>Duplicate to create variants</h4>
+            <p>Use the duplicate button on any transaction to quickly create a copy. Useful for modeling a second job, a spouse's income, or a what-if scenario — add it, check the forecast, then delete or pause it.</p>
+        </div>
+        <div class="tip-card">
+            <span class="tip-icon">⏸️</span>
+            <h4>Pause instead of delete</h4>
+            <p>If a subscription is on hold, a project income ended, or a seasonal expense is off, pause the transaction rather than deleting it. It disappears from the forecast but is there to resume with one click when circumstances change.</p>
+        </div>
+        <div class="tip-card">
+            <span class="tip-icon">🏷️</span>
+            <h4>Tag cross-cutting expenses</h4>
+            <p>Use tags like <code>kid</code>, <code>work</code>, or <code>shared</code> on transactions that don't fit neatly into one category. Tags are searchable in the transaction list, making it easy to filter to just the items that matter for a given conversation.</p>
+        </div>
+        <div class="tip-card">
+            <span class="tip-icon">🔚</span>
+            <h4>Set end dates on temporary expenses</h4>
+            <p>Loan payoffs, introductory subscription prices, a sublease — give them an end date so the forecast automatically stops counting them after that point. The impact on your future balance appears immediately.</p>
+        </div>
+        <div class="tip-card">
+            <span class="tip-icon">📊</span>
+            <h4>Use 36-month Running Balance</h4>
+            <p>Set the Running Balance chart to 36 months even if your main horizon is 12. The long-arc view reveals whether your savings are genuinely growing or just holding steady, which the short view can obscure.</p>
+        </div>
+        <div class="tip-card">
+            <span class="tip-icon">💾</span>
+            <h4>Edit in Excel, re-import</h4>
+            <p>If you prefer editing in a spreadsheet, export to Excel, make bulk changes to amounts, dates, or frequencies in the Transactions sheet, and re-import. All changes ripple through the app instantly. It's the fastest way to do a full budget overhaul.</p>
+        </div>
+        <div class="tip-card">
+            <span class="tip-icon">🌙</span>
+            <h4>Dark mode</h4>
+            <p>Toggle dark mode with the moon button in the header. The preference is saved in LocalStorage and remembered across sessions. This guide page respects your current theme too.</p>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer class="guide-foot">
+    <p><a href="index.html">← Back to Cashflow Compass</a> &nbsp;|&nbsp; <a href="https://observation-deck.netlify.app/">Observation Deck</a> &nbsp;|&nbsp; <a href="https://github.com/00xJS/cashflow-compass" target="_blank" rel="noopener">GitHub</a></p>
+</footer>
+
+</div><!-- /.page-wrap -->
+
+<script>
+// Apply dark mode from LocalStorage to match main app theme
+(function() {
+    try {
+        const raw = localStorage.getItem('projectBudgetingState');
+        if (raw) {
+            const s = JSON.parse(raw);
+            if (s.settings && s.settings.theme === 'dark') {
+                document.body.classList.add('dark');
+            }
+        }
+    } catch(e) {}
+})();
+</script>
+</body>
+</html>

@@ -463,6 +463,8 @@ footer.app-foot a:hover { text-decoration: underline; }
     .intro-banner { flex-direction: column; align-items: stretch; }
     .intro-banner .intro-actions { flex-direction: row; }
 }
+a.guide-link { color: var(--primary); font-size: 12px; font-weight: 600; text-decoration: none; opacity: 0.85; white-space: nowrap; }
+a.guide-link:hover { text-decoration: underline; opacity: 1; }
 .danger-text { color: var(--danger); }
 .success-text { color: var(--success); }
 .muted-text { color: var(--muted); font-size: 12px; }
@@ -475,7 +477,7 @@ footer.app-foot a:hover { text-decoration: underline; }
 <header class="app-head">
     <div class="brand">
         <h1>🧭 Cashflow Compass</h1>
-        <p class="tagline">Navigate your cashflow — up to 36 months out</p>
+        <p class="tagline">Navigate your cashflow — up to 36 months out <span style="white-space:nowrap">&nbsp;|&nbsp;<a href="guide.html" class="guide-link">How to get Started →</a></span></p>
     </div>
     <div class="header-controls">
         <select id="currencySelect" title="Currency">
