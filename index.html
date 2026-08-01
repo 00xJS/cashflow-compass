@@ -3,16 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0d1c">
-<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f6fb">
+<meta name="theme-color" content="#0a0d1c">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧭</text></svg>">
 <title>Cashflow Compass</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
-/* ===== Observation Deck design tokens (dark-first) ===== */
+/* ===== Observation Deck design tokens (dark only) ===== */
 :root {
-    color-scheme: dark light;
+    color-scheme: dark;
 
     /* surfaces */
     --bg: #0a0d1c;
@@ -55,59 +54,6 @@
     --radius-control: 8px;
     --radius-pill: 999px;
 }
-
-/* Light theme: applied when the OS prefers light (and no manual dark override),
-   or when the user explicitly toggles light. Keep both blocks in sync. */
-@media (prefers-color-scheme: light) {
-    :root:not([data-theme="dark"]) {
-        --bg: #f5f6fb;
-        --bg-raised: #ffffff;
-        --card: #ffffff;
-        --card-chrome: #eceef7;
-        --border: #dcdeeb;
-        --border-hover: rgba(232, 121, 43, 0.6);
-        --text: #1b1f4b;
-        --muted: #4d5378;
-        --faint: #6a7095;
-        --accent: #c95f16;
-        --accent-deep: #a84c09;
-        --info: #3556c9;
-        --tag-bg: rgba(232, 121, 43, 0.10);
-        --tag-text: #a3540e;
-        --live: #148a4d;
-        --warn: #b45309;
-        --down: #d64545;
-        --shadow: 0 10px 30px rgba(27, 31, 75, 0.10);
-        --btn-ink: #ffffff;
-        --focus-ring: rgba(232, 121, 43, 0.18);
-        --down-tint: rgba(214, 69, 69, 0.12);
-    }
-}
-:root[data-theme="light"] {
-    --bg: #f5f6fb;
-    --bg-raised: #ffffff;
-    --card: #ffffff;
-    --card-chrome: #eceef7;
-    --border: #dcdeeb;
-    --border-hover: rgba(232, 121, 43, 0.6);
-    --text: #1b1f4b;
-    --muted: #4d5378;
-    --faint: #6a7095;
-    --accent: #c95f16;
-    --accent-deep: #a84c09;
-    --info: #3556c9;
-    --tag-bg: rgba(232, 121, 43, 0.10);
-    --tag-text: #a3540e;
-    --live: #148a4d;
-    --warn: #b45309;
-    --down: #d64545;
-    --shadow: 0 10px 30px rgba(27, 31, 75, 0.10);
-    --btn-ink: #ffffff;
-    --focus-ring: rgba(232, 121, 43, 0.18);
-    --down-tint: rgba(214, 69, 69, 0.12);
-}
-:root[data-theme="dark"] { color-scheme: dark; }
-:root[data-theme="light"] { color-scheme: light; }
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -631,7 +577,6 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
             <option value="24">24 months</option>
             <option value="36">36 months</option>
         </select>
-        <button id="themeToggle" title="Toggle theme">🌙</button>
         <button id="exportXlsxBtn" class="primary">⬇ Excel</button>
         <button id="importXlsxBtn">⬆ Excel</button>
         <button id="exportJsonBtn" class="ghost" title="Export JSON">{ JSON }</button>
@@ -1102,8 +1047,7 @@ function defaultState() {
         settings: {
             currency: 'USD',
             forecastHorizon: '12',
-            chartHorizons: {},
-            theme: 'auto'   // 'auto' follows the OS; 'light'/'dark' are manual overrides
+            chartHorizons: {}
         },
         accounts: [],
         categories: structuredClone(DEFAULT_CATEGORIES),
@@ -1151,9 +1095,7 @@ function migrate(s) {
         if (!s.settings.chartHorizons) s.settings.chartHorizons = {};
     }
     // v3 → v4 (Observation Deck theme): re-skin default category colors to the
-    // deck palette when they still match the old defaults (preserve customizations),
-    // and move 'light' (the old implicit default) to 'auto' so dark-first + OS
-    // preference takes over. Users who explicitly chose dark keep dark.
+    // deck palette when they still match the old defaults (preserve customizations).
     if (fromVersion < 4) {
         DEFAULT_CATEGORIES.forEach(def => {
             const cur = s.categories.find(c => c.id === def.id);
@@ -1161,9 +1103,9 @@ function migrate(s) {
                 cur.color = def.color;
             }
         });
-        if (s.settings.theme === 'light') s.settings.theme = 'auto';
     }
-    if (!['auto', 'light', 'dark'].includes(s.settings.theme)) s.settings.theme = 'auto';
+    // The app is dark-only — drop any stored theme preference from older states.
+    delete s.settings.theme;
     if (!s.settings.forecastHorizon) s.settings.forecastHorizon = '12';
     if (!s.settings.chartHorizons) s.settings.chartHorizons = {};
     if (!s.transactions) s.transactions = [];
@@ -1882,24 +1824,23 @@ function renderForecast(forecast) {
 /* ───── Charts ───── */
 
 /* Deck chart theming: colors are read from the CSS variables at chart-build
- * time so charts always match the active theme (incl. mid-session OS flips). */
+ * time so charts stay in lockstep with the token block. */
 function deckChartTheme() {
     const css = getComputedStyle(document.documentElement);
     const v = n => css.getPropertyValue(n).trim();
-    const dark = effectiveTheme() === 'dark';
     Chart.defaults.color = v('--muted');
-    Chart.defaults.borderColor = dark ? 'rgba(255,255,255,0.07)' : '#e3e5f0';
+    Chart.defaults.borderColor = 'rgba(255,255,255,0.07)';
     Chart.defaults.font.family = v('--font-sans');
     Chart.defaults.plugins.tooltip.backgroundColor = v('--bg-raised');
     Chart.defaults.plugins.tooltip.titleColor = v('--text');
     Chart.defaults.plugins.tooltip.bodyColor = v('--muted');
-    Chart.defaults.plugins.tooltip.borderColor = dark ? 'rgba(255,255,255,0.09)' : '#dcdeeb';
+    Chart.defaults.plugins.tooltip.borderColor = 'rgba(255,255,255,0.09)';
     Chart.defaults.plugins.tooltip.borderWidth = 1;
     return {
         accent: v('--accent'), accentDeep: v('--accent-deep'), magenta: v('--magenta'),
         live: v('--live'), warn: v('--warn'), down: v('--down'),
         muted: v('--muted'), faint: v('--faint'), card: v('--card'),
-        accentFill: dark ? 'rgba(255,154,68,0.12)' : 'rgba(232,121,43,0.12)'
+        accentFill: 'rgba(255,154,68,0.12)'
     };
 }
 
@@ -2259,8 +2200,7 @@ function exportExcel() {
         ['key','value'],
         ['schemaVersion', SCHEMA_VERSION],
         ['currency', state.settings.currency],
-        ['forecastHorizon', state.settings.forecastHorizon],
-        ['theme', state.settings.theme]
+        ['forecastHorizon', state.settings.forecastHorizon]
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(settingsRows), 'Settings');
 
@@ -2297,7 +2237,7 @@ function importExcelArrayBuffer(ab) {
             if (k === 'currency')             newState.settings.currency = String(v || 'USD');
             else if (k === 'forecastHorizon') newState.settings.forecastHorizon = String(v || '12');
             else if (k === 'forecastMonths')  newState.settings.forecastHorizon = String(parseInt(v) || 12);
-            else if (k === 'theme')           newState.settings.theme = ['auto','light','dark'].includes(String(v)) ? String(v) : 'auto';
+            // 'theme' from older workbooks is ignored — the app is dark-only.
         });
     }
 
@@ -2350,7 +2290,6 @@ function importExcelArrayBuffer(ab) {
 
     state = newState;
     saveState();
-    applyTheme();
     renderAll();
     flashStatus('Imported from Excel — replaced all in-browser data.');
 }
@@ -2386,46 +2325,12 @@ function importJsonText(text) {
         const parsed = JSON.parse(text);
         state = migrate(parsed);
         saveState();
-        applyTheme();
         renderAll();
         flashStatus('Imported JSON — replaced all in-browser data.');
     } catch (e) {
         alert('Could not read JSON: ' + e.message);
     }
 }
-
-/* ───── Theme ───── */
-
-// 'auto' follows the OS via prefers-color-scheme (dark is the deck default);
-// clicking the toggle pins an explicit 'light'/'dark' override.
-function effectiveTheme() {
-    const t = state.settings.theme;
-    if (t === 'dark' || t === 'light') return t;
-    return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-}
-
-function applyTheme() {
-    const t = state.settings.theme;
-    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
-    else document.documentElement.removeAttribute('data-theme');
-    const btn = document.getElementById('themeToggle');
-    btn.textContent = effectiveTheme() === 'dark' ? '☀️' : '🌙';
-    btn.title = `Theme: ${t === 'auto' ? 'auto (follows OS)' : t} — click to switch`;
-}
-
-document.getElementById('themeToggle').onclick = () => {
-    state.settings.theme = effectiveTheme() === 'dark' ? 'light' : 'dark';
-    applyTheme();
-    saveState();
-    if (Object.keys(charts).length) renderCharts();
-};
-
-// Mid-session OS theme flips: restyle page + rebuild charts when following the OS.
-matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
-    if (state.settings.theme === 'dark' || state.settings.theme === 'light') return;
-    applyTheme();
-    if (Object.keys(charts).length) renderCharts();
-});
 
 /* ───── Currency / horizon ───── */
 
@@ -2502,7 +2407,6 @@ document.getElementById('resetBtn').onclick = () => {
         () => {
             state = defaultState();
             saveState();
-            applyTheme();
             renderAll();
             flashStatus('Reset complete.');
         });
@@ -2581,7 +2485,6 @@ function escapeHtml(s) {
 
 document.getElementById('acctAsOf').value = fmtDate(new Date());
 document.getElementById('txStart').value = fmtDate(new Date());
-applyTheme();
 renderAll();
 onKindOrFreqChange();
 </script>

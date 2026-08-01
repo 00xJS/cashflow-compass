@@ -3,28 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0d1c">
-<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f6fb">
+<meta name="theme-color" content="#0a0d1c">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧭</text></svg>">
 <title>Getting Started — Cashflow Compass</title>
-<script>
-// Apply the app's saved theme override before first paint ('auto' follows the OS).
-(function() {
-    let t = 'auto';
-    try {
-        const raw = localStorage.getItem('projectBudgetingState');
-        if (raw) {
-            const s = JSON.parse(raw);
-            t = (s.settings && s.settings.theme) || 'auto';
-        }
-    } catch (e) {}
-    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
-})();
-</script>
 <style>
-/* ── Observation Deck design tokens (mirrors index.html, dark-first) ── */
+/* ── Observation Deck design tokens (mirrors index.html, dark only) ── */
 :root {
-    color-scheme: dark light;
+    color-scheme: dark;
 
     /* surfaces */
     --bg: #0a0d1c;
@@ -63,50 +48,6 @@
     --radius-control: 8px;
     --radius-pill: 999px;
 }
-
-/* Light theme: OS preference (unless manually pinned dark) or explicit override. */
-@media (prefers-color-scheme: light) {
-    :root:not([data-theme="dark"]) {
-        --bg: #f5f6fb;
-        --bg-raised: #ffffff;
-        --card: #ffffff;
-        --card-chrome: #eceef7;
-        --border: #dcdeeb;
-        --border-hover: rgba(232, 121, 43, 0.6);
-        --text: #1b1f4b;
-        --muted: #4d5378;
-        --faint: #6a7095;
-        --accent: #c95f16;
-        --accent-deep: #a84c09;
-        --info: #3556c9;
-        --live: #148a4d;
-        --warn: #b45309;
-        --down: #d64545;
-        --shadow: 0 10px 30px rgba(27, 31, 75, 0.10);
-        --btn-ink: #ffffff;
-    }
-}
-:root[data-theme="light"] {
-    --bg: #f5f6fb;
-    --bg-raised: #ffffff;
-    --card: #ffffff;
-    --card-chrome: #eceef7;
-    --border: #dcdeeb;
-    --border-hover: rgba(232, 121, 43, 0.6);
-    --text: #1b1f4b;
-    --muted: #4d5378;
-    --faint: #6a7095;
-    --accent: #c95f16;
-    --accent-deep: #a84c09;
-    --info: #3556c9;
-    --live: #148a4d;
-    --warn: #b45309;
-    --down: #d64545;
-    --shadow: 0 10px 30px rgba(27, 31, 75, 0.10);
-    --btn-ink: #ffffff;
-}
-:root[data-theme="dark"] { color-scheme: dark; }
-:root[data-theme="light"] { color-scheme: light; }
 
 /* ── Base ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -909,7 +850,7 @@ a.kicker:hover { color: var(--accent); }
             <tr><td><code>Accounts</code></td><td>All account records — name, type, balance, as-of date</td></tr>
             <tr><td><code>Categories</code></td><td>All categories — name, kind, color</td></tr>
             <tr><td><code>Transactions</code></td><td>Every transaction with all fields — frequency, escalation, tags, notes, paused state</td></tr>
-            <tr><td><code>Settings</code></td><td>App settings — currency, horizon, theme, schema version</td></tr>
+            <tr><td><code>Settings</code></td><td>App settings — currency, horizon, schema version</td></tr>
             <tr><td><code>Forecast</code></td><td>The rendered projection grid (read-only export reference)</td></tr>
         </tbody>
     </table>
@@ -978,9 +919,9 @@ a.kicker:hover { color: var(--accent); }
             <p>If you prefer editing in a spreadsheet, export to Excel, make bulk changes to amounts, dates, or frequencies in the Transactions sheet, and re-import. All changes ripple through the app instantly. It's the fastest way to do a full budget overhaul.</p>
         </div>
         <div class="tip-card">
-            <span class="tip-icon">🌙</span>
-            <h4>Dark &amp; light themes</h4>
-            <p>The app follows your system's dark/light preference automatically. Use the moon/sun button in the header to pin a theme instead — the override is saved in LocalStorage and remembered across sessions. This guide page respects your current theme too.</p>
+            <span class="tip-icon">🔭</span>
+            <h4>Built for the Observation Deck</h4>
+            <p>Cashflow Compass uses the Observation Deck's dark "mission control" theme — the same design language as the rest of the fleet. Mono uppercase labels mark anything data-ish, and every number is set in tabular figures so columns line up as values change.</p>
         </div>
     </div>
 </section>

@@ -89,7 +89,7 @@ Five sheets:
 | `Accounts` | id, name, type, startingBalance, asOfDate |
 | `Categories` | id, name, kind, color |
 | `Transactions` | id, name, kind, amount, categoryId, accountId, fromAccountId, frequency, customN, customUnit, startDate, endDate, escalation, tags (semicolon-separated), notes, paused |
-| `Settings` | schemaVersion, currency, forecastHorizon, theme |
+| `Settings` | schemaVersion, currency, forecastHorizon |
 | `Forecast` | rendered projection (read-only — export only) |
 
 **Re-import semantics: replace all.** The workbook is the source of truth. Importing a file wipes whatever is in your browser and reloads from the spreadsheet. A confirmation dialog warns you before any overwrite. Edit amounts in Excel, re-import, and the new numbers ripple through the forecast and charts.
@@ -103,7 +103,7 @@ Lighter alternative if you want to share state without opening Excel. Same repla
 - **Reset** button (trash icon) wipes everything after a confirmation; export first if you want a backup
 
 ### Quality-of-life
-- **Dark-first theme** that follows your OS light/dark preference, with a manual override toggle
+- **Observation Deck dark theme** — the shared "mission control" design language used across the deck
 - **Currency selector** (USD / EUR / GBP / CAD / AUD / JPY)
 - **Collapsible sections** — Categories, Transactions, Forecast, and Visualizations can each be collapsed to keep the page tidy
 - **Empty-state welcome banner** with a "Load sample data" button to explore the app instantly
@@ -129,7 +129,7 @@ The app migrates older data forward automatically. You don't need to do anything
 - **v1** — initial release
 - **v2** — broader category color palette (each kind no longer all-blue); v1 default colors are auto-refreshed, custom colors preserved
 - **v3** — `forecastMonths` (number) replaced by `forecastHorizon` (string token, supports `eoy`); `chartHorizons` map added for per-chart overrides
-- **v4** — Observation Deck theme: dark-first design tokens, `theme` setting gains `auto` (follows OS; old `light` default migrates to `auto`), default category colors re-skinned to the deck palette (custom colors preserved)
+- **v4** — Observation Deck theme: dark-only design tokens; the `theme` setting is removed (any stored preference is dropped on load), and default category colors are re-skinned to the deck palette (custom colors preserved)
 
 ---
 
