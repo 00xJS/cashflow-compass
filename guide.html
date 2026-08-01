@@ -3,49 +3,145 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0d1c">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f6fb">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧭</text></svg>">
 <title>Getting Started — Cashflow Compass</title>
+<script>
+// Apply the app's saved theme override before first paint ('auto' follows the OS).
+(function() {
+    let t = 'auto';
+    try {
+        const raw = localStorage.getItem('projectBudgetingState');
+        if (raw) {
+            const s = JSON.parse(raw);
+            t = (s.settings && s.settings.theme) || 'auto';
+        }
+    } catch (e) {}
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+})();
+</script>
 <style>
-/* ── Theme variables (mirrors index.html) ── */
+/* ── Observation Deck design tokens (mirrors index.html, dark-first) ── */
 :root {
-    --primary:      #16a34a;
-    --primary-dark: #15803d;
-    --danger:       #dc2626;
-    --warning:      #d97706;
-    --success:      #16a34a;
-    --blue:         #2563eb;
-    --purple:       #7c3aed;
-    --bg:           #f1f5f9;
-    --card:         #ffffff;
-    --card-alt:     #f8fafc;
-    --text:         #1e293b;
-    --muted:        #64748b;
-    --border:       #e2e8f0;
-    --shadow:       0 1px 4px rgba(0,0,0,0.08);
-    --radius:       10px;
+    color-scheme: dark light;
+
+    /* surfaces */
+    --bg: #0a0d1c;
+    --bg-raised: #10142e;
+    --card: #12163a;
+    --card-chrome: #0c0f26;
+    --border: rgba(255, 255, 255, 0.09);
+    --border-hover: rgba(255, 154, 68, 0.55);
+
+    /* text */
+    --text: #e8eaf6;
+    --muted: #9ba1c5;
+    --faint: #6c7299;
+
+    /* accents */
+    --accent: #ff9a44;
+    --accent-deep: #e8792b;
+    --magenta: #c23e8c;
+    --info: #5b8def;
+
+    /* semantic */
+    --live: #3ddc84;
+    --warn: #ffc24b;
+    --down: #ff6b6b;
+
+    /* components */
+    --shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+    --btn-ink: #0a0d1c;
+
+    /* type */
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+    /* shape */
+    --radius-card: 12px;
+    --radius-control: 8px;
+    --radius-pill: 999px;
 }
-body.dark {
-    --bg:       #0f1117;
-    --card:     #1a1f27;
-    --card-alt: #232932;
-    --text:     #e2e8f0;
-    --muted:    #94a3b8;
-    --border:   #2d3748;
-    --shadow:   0 1px 6px rgba(0,0,0,0.4);
+
+/* Light theme: OS preference (unless manually pinned dark) or explicit override. */
+@media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+        --bg: #f5f6fb;
+        --bg-raised: #ffffff;
+        --card: #ffffff;
+        --card-chrome: #eceef7;
+        --border: #dcdeeb;
+        --border-hover: rgba(232, 121, 43, 0.6);
+        --text: #1b1f4b;
+        --muted: #4d5378;
+        --faint: #6a7095;
+        --accent: #c95f16;
+        --accent-deep: #a84c09;
+        --info: #3556c9;
+        --live: #148a4d;
+        --warn: #b45309;
+        --down: #d64545;
+        --shadow: 0 10px 30px rgba(27, 31, 75, 0.10);
+        --btn-ink: #ffffff;
+    }
 }
+:root[data-theme="light"] {
+    --bg: #f5f6fb;
+    --bg-raised: #ffffff;
+    --card: #ffffff;
+    --card-chrome: #eceef7;
+    --border: #dcdeeb;
+    --border-hover: rgba(232, 121, 43, 0.6);
+    --text: #1b1f4b;
+    --muted: #4d5378;
+    --faint: #6a7095;
+    --accent: #c95f16;
+    --accent-deep: #a84c09;
+    --info: #3556c9;
+    --live: #148a4d;
+    --warn: #b45309;
+    --down: #d64545;
+    --shadow: 0 10px 30px rgba(27, 31, 75, 0.10);
+    --btn-ink: #ffffff;
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
 
 /* ── Base ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-sans);
     background: var(--bg);
     color: var(--text);
     line-height: 1.65;
     font-size: 15px;
+    -webkit-font-smoothing: antialiased;
     transition: background 0.2s, color 0.2s;
 }
-a { color: var(--blue); text-decoration: none; }
-a:hover { text-decoration: underline; }
+/* ambient deck glow */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+        radial-gradient(900px 480px at 15% -10%, rgba(232, 121, 43, 0.10), transparent 60%),
+        radial-gradient(800px 480px at 90% 0%, rgba(194, 62, 140, 0.09), transparent 60%);
+}
+::selection { background: var(--accent-deep); color: #fff; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-deep); text-decoration: underline; }
+a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+}
 h1, h2, h3, h4 { line-height: 1.3; font-weight: 700; }
 p { margin-bottom: 0.75em; }
 p:last-child { margin-bottom: 0; }
@@ -53,12 +149,12 @@ ul, ol { padding-left: 1.4em; margin-bottom: 0.75em; }
 li { margin-bottom: 0.3em; }
 strong { font-weight: 600; }
 code {
-    background: var(--card-alt);
+    background: var(--bg-raised);
     border: 1px solid var(--border);
     border-radius: 4px;
     padding: 1px 5px;
     font-size: 13px;
-    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-family: var(--font-mono);
 }
 
 /* ── Layout ── */
@@ -70,7 +166,7 @@ code {
 
 /* ── Nav bar ── */
 .guide-nav {
-    background: var(--card);
+    background: var(--card-chrome);
     border-bottom: 1px solid var(--border);
     position: sticky;
     top: 0;
@@ -88,19 +184,19 @@ code {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: var(--primary);
-    color: #fff;
+    background: var(--accent);
+    color: var(--btn-ink);
     border: none;
-    border-radius: 7px;
+    border-radius: var(--radius-control);
     padding: 7px 14px;
     font-size: 13.5px;
     font-weight: 600;
     cursor: pointer;
     text-decoration: none;
-    transition: background 0.15s;
+    transition: background 0.2s ease;
     white-space: nowrap;
 }
-.back-btn:hover { background: var(--primary-dark); text-decoration: none; }
+.back-btn:hover { background: var(--accent-deep); color: var(--btn-ink); text-decoration: none; }
 .nav-title {
     font-weight: 700;
     font-size: 15px;
@@ -114,9 +210,20 @@ code {
     border-bottom: 1px solid var(--border);
     margin-bottom: 48px;
 }
+a.kicker {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 8px;
+}
+a.kicker:hover { color: var(--accent); }
 .guide-hero h1 {
     font-size: 2rem;
-    color: var(--primary);
+    color: var(--text);
     margin-bottom: 10px;
 }
 .guide-hero .subtitle {
@@ -129,15 +236,23 @@ code {
 .toc {
     background: var(--card);
     border: 1px solid var(--border);
-    border-left: 4px solid var(--primary);
-    border-radius: var(--radius);
+    border-left: 4px solid var(--accent);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow);
     padding: 20px 24px;
     margin-bottom: 48px;
 }
-.toc h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 12px; }
+.toc h3 {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--faint);
+    margin-bottom: 12px;
+}
 .toc ol { margin: 0; padding-left: 1.3em; }
 .toc li { margin-bottom: 4px; font-size: 14px; }
-.toc a { color: var(--primary); font-weight: 500; }
+.toc a { color: var(--accent); font-weight: 500; }
 
 /* ── Guide sections ── */
 .guide-section {
@@ -148,7 +263,7 @@ code {
     color: var(--text);
     margin-bottom: 6px;
     padding-bottom: 10px;
-    border-bottom: 2px solid var(--primary);
+    border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
     gap: 12px;
@@ -159,8 +274,8 @@ code {
     justify-content: center;
     width: 32px;
     height: 32px;
-    background: var(--primary);
-    color: #fff;
+    background: var(--accent);
+    color: var(--btn-ink);
     border-radius: 50%;
     font-size: 14px;
     font-weight: 700;
@@ -187,7 +302,7 @@ code {
 .step-card {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-card);
     padding: 16px 20px;
     display: flex;
     gap: 16px;
@@ -200,8 +315,8 @@ code {
     justify-content: center;
     width: 30px;
     height: 30px;
-    background: var(--primary);
-    color: #fff;
+    background: var(--accent);
+    color: var(--btn-ink);
     border-radius: 50%;
     font-size: 14px;
     font-weight: 700;
@@ -213,25 +328,26 @@ code {
 
 /* ── Callout boxes ── */
 .callout {
-    border-radius: var(--radius);
+    border-radius: var(--radius-card);
     padding: 14px 18px;
     margin: 16px 0;
     font-size: 13.5px;
     border-left: 4px solid;
 }
-.callout.tip   { background: rgba(22,163,74,0.07);  border-color: var(--success); }
-.callout.note  { background: rgba(37,99,235,0.07);  border-color: var(--blue); }
-.callout.warn  { background: rgba(217,119,6,0.09);  border-color: var(--warning); }
+.callout.tip   { background: color-mix(in srgb, var(--live) 9%, transparent);  border-color: var(--live); }
+.callout.note  { background: color-mix(in srgb, var(--info) 9%, transparent);  border-color: var(--info); }
+.callout.warn  { background: color-mix(in srgb, var(--warn) 11%, transparent); border-color: var(--warn); }
 .callout-label {
+    font-family: var(--font-mono);
     font-weight: 700;
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     margin-bottom: 4px;
 }
-.callout.tip  .callout-label { color: var(--success); }
-.callout.note .callout-label { color: var(--blue); }
-.callout.warn .callout-label { color: var(--warning); }
+.callout.tip  .callout-label { color: var(--live); }
+.callout.note .callout-label { color: var(--info); }
+.callout.warn .callout-label { color: var(--warn); }
 
 /* ── Data tables ── */
 .guide-table {
@@ -240,18 +356,20 @@ code {
     margin: 16px 0;
     font-size: 13.5px;
     background: var(--card);
-    border-radius: var(--radius);
+    border-radius: var(--radius-control);
     overflow: hidden;
     box-shadow: var(--shadow);
 }
 .guide-table th {
-    background: var(--card-alt);
+    background: var(--card-chrome);
     padding: 10px 14px;
     text-align: left;
-    font-size: 12px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--muted);
+    letter-spacing: 0.08em;
+    color: var(--faint);
     border-bottom: 1px solid var(--border);
 }
 .guide-table td {
@@ -260,7 +378,7 @@ code {
     vertical-align: top;
 }
 .guide-table tr:last-child td { border-bottom: none; }
-.guide-table tr:hover td { background: var(--card-alt); }
+.guide-table tr:hover td { background: var(--bg-raised); }
 
 /* ── Frequency grid ── */
 .freq-grid {
@@ -272,15 +390,17 @@ code {
 .freq-card {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-card);
     padding: 14px 16px;
     box-shadow: var(--shadow);
+    transition: border-color 0.2s ease;
 }
+.freq-card:hover { border-color: var(--border-hover); }
 .freq-card .freq-name {
     font-weight: 700;
     font-size: 14px;
     margin-bottom: 4px;
-    color: var(--primary);
+    color: var(--accent);
 }
 .freq-card .freq-detail {
     font-size: 12.5px;
@@ -298,14 +418,14 @@ code {
     background: var(--card);
     border: 1px solid var(--border);
     border-left: 4px solid;
-    border-radius: var(--radius);
+    border-radius: var(--radius-card);
     padding: 14px 18px;
     box-shadow: var(--shadow);
 }
-.insight-row.positive { border-left-color: var(--success); }
-.insight-row.info     { border-left-color: var(--blue); }
-.insight-row.fact     { border-left-color: var(--purple); }
-.insight-row.warning  { border-left-color: var(--warning); }
+.insight-row.positive { border-left-color: var(--live); }
+.insight-row.info     { border-left-color: var(--info); }
+.insight-row.fact     { border-left-color: var(--magenta); }
+.insight-row.warning  { border-left-color: var(--warn); }
 .insight-row .ins-header {
     display: flex;
     align-items: center;
@@ -313,9 +433,10 @@ code {
     margin-bottom: 5px;
 }
 .ins-num {
+    font-family: var(--font-mono);
     font-size: 11px;
     font-weight: 700;
-    background: var(--card-alt);
+    background: var(--bg-raised);
     border: 1px solid var(--border);
     border-radius: 50%;
     width: 22px;
@@ -339,21 +460,21 @@ code {
 .chart-desc-card {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-card);
     padding: 16px 18px;
     box-shadow: var(--shadow);
 }
 .chart-desc-card .chart-name {
     font-weight: 700;
     font-size: 14px;
-    color: var(--blue);
+    color: var(--text);
     margin-bottom: 6px;
 }
 .chart-desc-card p { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
 .chart-desc-card .chart-action {
     font-size: 12px;
     font-weight: 600;
-    color: var(--primary);
+    color: var(--accent);
 }
 
 /* ── Pro tips ── */
@@ -366,7 +487,7 @@ code {
 .tip-card {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-card);
     padding: 16px 18px;
     box-shadow: var(--shadow);
 }
@@ -383,12 +504,12 @@ code {
     text-align: center;
     padding: 24px 0 0;
     border-top: 1px solid var(--border);
-    color: var(--muted);
+    color: var(--faint);
     font-size: 13px;
     margin-top: 60px;
 }
-.guide-foot a { color: var(--blue); text-decoration: none; }
-.guide-foot a:hover { text-decoration: underline; }
+.guide-foot a { color: var(--accent); text-decoration: none; }
+.guide-foot a:hover { color: var(--accent-deep); text-decoration: underline; }
 
 /* ── Responsive ── */
 @media (max-width: 640px) {
@@ -411,6 +532,7 @@ code {
 
 <!-- Hero -->
 <div class="guide-hero">
+    <a class="kicker" href="https://observation-deck.netlify.app/">Observation Deck / Cashflow Compass</a>
     <h1>Getting Started</h1>
     <p class="subtitle">Everything you need to go from a blank slate to a full 12-month forecast — and understand every number on the way.</p>
 </div>
@@ -857,8 +979,8 @@ code {
         </div>
         <div class="tip-card">
             <span class="tip-icon">🌙</span>
-            <h4>Dark mode</h4>
-            <p>Toggle dark mode with the moon button in the header. The preference is saved in LocalStorage and remembered across sessions. This guide page respects your current theme too.</p>
+            <h4>Dark &amp; light themes</h4>
+            <p>The app follows your system's dark/light preference automatically. Use the moon/sun button in the header to pin a theme instead — the override is saved in LocalStorage and remembered across sessions. This guide page respects your current theme too.</p>
         </div>
     </div>
 </section>
@@ -870,19 +992,5 @@ code {
 
 </div><!-- /.page-wrap -->
 
-<script>
-// Apply dark mode from LocalStorage to match main app theme
-(function() {
-    try {
-        const raw = localStorage.getItem('projectBudgetingState');
-        if (raw) {
-            const s = JSON.parse(raw);
-            if (s.settings && s.settings.theme === 'dark') {
-                document.body.classList.add('dark');
-            }
-        }
-    } catch(e) {}
-})();
-</script>
 </body>
 </html>

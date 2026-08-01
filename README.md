@@ -103,7 +103,7 @@ Lighter alternative if you want to share state without opening Excel. Same repla
 - **Reset** button (trash icon) wipes everything after a confirmation; export first if you want a backup
 
 ### Quality-of-life
-- **Dark mode** toggle
+- **Dark-first theme** that follows your OS light/dark preference, with a manual override toggle
 - **Currency selector** (USD / EUR / GBP / CAD / AUD / JPY)
 - **Collapsible sections** — Categories, Transactions, Forecast, and Visualizations can each be collapsed to keep the page tidy
 - **Empty-state welcome banner** with a "Load sample data" button to explore the app instantly
@@ -129,6 +129,7 @@ The app migrates older data forward automatically. You don't need to do anything
 - **v1** — initial release
 - **v2** — broader category color palette (each kind no longer all-blue); v1 default colors are auto-refreshed, custom colors preserved
 - **v3** — `forecastMonths` (number) replaced by `forecastHorizon` (string token, supports `eoy`); `chartHorizons` map added for per-chart overrides
+- **v4** — Observation Deck theme: dark-first design tokens, `theme` setting gains `auto` (follows OS; old `light` default migrates to `auto`), default category colors re-skinned to the deck palette (custom colors preserved)
 
 ---
 

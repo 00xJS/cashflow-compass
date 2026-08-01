@@ -3,65 +3,156 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0d1c">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f6fb">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧭</text></svg>">
 <title>Cashflow Compass</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
+/* ===== Observation Deck design tokens (dark-first) ===== */
 :root {
-    --primary:      #16a34a;
-    --primary-dark: #15803d;
-    --blue:         #2563eb;
-    --purple:       #7c3aed;
-    --orange:       #ea580c;
-    --red:          #dc2626;
-    --border:       #ddd;
-    --bg:           #f4f5f7;
-    --card:         #ffffff;
-    --card-alt:     #f8fafc;
-    --text:         #222;
-    --muted:        #666;
-    --success:      #15803d;
-    --danger:       #d32f2f;
-    --warning:      #b45309;
-    --focus-ring:   rgba(22,163,74,0.25);
-    --shadow:       0 2px 20px rgba(0,0,0,0.09);
-    --grid-line:    #e6e8eb;
+    color-scheme: dark light;
+
+    /* surfaces */
+    --bg: #0a0d1c;
+    --bg-raised: #10142e;
+    --card: #12163a;
+    --card-chrome: #0c0f26;
+    --border: rgba(255, 255, 255, 0.09);
+    --border-hover: rgba(255, 154, 68, 0.55);
+
+    /* text */
+    --text: #e8eaf6;
+    --muted: #9ba1c5;
+    --faint: #6c7299;
+
+    /* accents */
+    --accent: #ff9a44;
+    --accent-deep: #e8792b;
+    --magenta: #c23e8c;
+    --info: #5b8def;
+
+    /* semantic */
+    --live: #3ddc84;
+    --warn: #ffc24b;
+    --down: #ff6b6b;
+
+    /* components */
+    --tag-bg: rgba(255, 154, 68, 0.10);
+    --tag-text: #ffb877;
+    --shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+    --btn-ink: #0a0d1c;
+    --focus-ring: rgba(255, 154, 68, 0.18);
+    --down-tint: rgba(255, 107, 107, 0.14);
+
+    /* type */
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+    /* shape */
+    --radius-card: 12px;
+    --radius-control: 8px;
+    --radius-pill: 999px;
 }
-[data-theme="dark"] {
-    --border:       #2d3340;
-    --bg:           #0f1216;
-    --card:         #1a1f27;
-    --card-alt:     #232932;
-    --text:         #e6e8eb;
-    --muted:        #9aa3b2;
-    --shadow:       0 2px 20px rgba(0,0,0,0.4);
-    --grid-line:    #2a313b;
-    --primary:      #22c55e;
-    --primary-dark: #16a34a;
-    --blue:         #60a5fa;
-    --purple:       #a78bfa;
-    --orange:       #fb923c;
-    --red:          #f87171;
+
+/* Light theme: applied when the OS prefers light (and no manual dark override),
+   or when the user explicitly toggles light. Keep both blocks in sync. */
+@media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+        --bg: #f5f6fb;
+        --bg-raised: #ffffff;
+        --card: #ffffff;
+        --card-chrome: #eceef7;
+        --border: #dcdeeb;
+        --border-hover: rgba(232, 121, 43, 0.6);
+        --text: #1b1f4b;
+        --muted: #4d5378;
+        --faint: #6a7095;
+        --accent: #c95f16;
+        --accent-deep: #a84c09;
+        --info: #3556c9;
+        --tag-bg: rgba(232, 121, 43, 0.10);
+        --tag-text: #a3540e;
+        --live: #148a4d;
+        --warn: #b45309;
+        --down: #d64545;
+        --shadow: 0 10px 30px rgba(27, 31, 75, 0.10);
+        --btn-ink: #ffffff;
+        --focus-ring: rgba(232, 121, 43, 0.18);
+        --down-tint: rgba(214, 69, 69, 0.12);
+    }
 }
+:root[data-theme="light"] {
+    --bg: #f5f6fb;
+    --bg-raised: #ffffff;
+    --card: #ffffff;
+    --card-chrome: #eceef7;
+    --border: #dcdeeb;
+    --border-hover: rgba(232, 121, 43, 0.6);
+    --text: #1b1f4b;
+    --muted: #4d5378;
+    --faint: #6a7095;
+    --accent: #c95f16;
+    --accent-deep: #a84c09;
+    --info: #3556c9;
+    --tag-bg: rgba(232, 121, 43, 0.10);
+    --tag-text: #a3540e;
+    --live: #148a4d;
+    --warn: #b45309;
+    --down: #d64545;
+    --shadow: 0 10px 30px rgba(27, 31, 75, 0.10);
+    --btn-ink: #ffffff;
+    --focus-ring: rgba(232, 121, 43, 0.18);
+    --down-tint: rgba(214, 69, 69, 0.12);
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
 
 *, *::before, *::after { box-sizing: border-box; }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    font-family: var(--font-sans);
     margin: 0;
-    padding: 20px;
+    padding: 28px 20px 40px;
     background: var(--bg);
     color: var(--text);
     line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ambient deck glow */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+        radial-gradient(900px 480px at 15% -10%, rgba(232, 121, 43, 0.10), transparent 60%),
+        radial-gradient(800px 480px at 90% 0%, rgba(194, 62, 140, 0.09), transparent 60%);
+}
+
+::selection { background: var(--accent-deep); color: #fff; }
+a { color: var(--accent); }
+a:hover { color: var(--accent-deep); }
+a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+@keyframes deck-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
 .container {
     max-width: 1240px;
     margin: auto;
-    padding: 24px 28px 40px;
-    background: var(--card);
-    box-shadow: var(--shadow);
-    border-radius: 14px;
 }
 
 /* ── Header ── */
@@ -76,10 +167,20 @@ header.app-head {
     border-bottom: 1px solid var(--border);
 }
 .brand { display: flex; flex-direction: column; gap: 2px; }
+a.kicker {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+    text-decoration: none;
+}
+a.kicker:hover { color: var(--accent); }
 h1 {
-    color: var(--primary);
+    color: var(--text);
     margin: 0;
     font-size: 1.7rem;
+    font-weight: 700;
     letter-spacing: -0.5px;
 }
 .tagline {
@@ -104,57 +205,70 @@ button {
     padding: 8px 14px;
     font-size: 13.5px;
     font-weight: 600;
-    border: 1.5px solid var(--border);
-    background: var(--card);
+    border: 1px solid var(--border);
+    background: var(--bg-raised);
     color: var(--text);
-    border-radius: 7px;
+    border-radius: var(--radius-control);
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s, transform 0.05s;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
     font-family: inherit;
 }
-button:hover { border-color: var(--primary); }
+button:hover { border-color: var(--border-hover); }
 button:active { transform: translateY(1px); }
-button.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
-button.primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
-button.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
-button.danger:hover { filter: brightness(1.05); }
+button.primary { background: var(--accent); color: var(--btn-ink); border-color: var(--accent); }
+button.primary:hover { background: var(--accent-deep); border-color: var(--accent-deep); }
+button.danger { background: var(--down); color: var(--btn-ink); border-color: var(--down); }
+button.danger:hover { filter: brightness(1.08); }
 button.ghost { background: transparent; }
 button.icon { padding: 6px 9px; font-size: 13px; }
 
-/* ── Section cards ── */
+/* ── Section cards (deck panels) ── */
 section.card {
-    background: var(--card-alt);
+    background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow);
     padding: 18px 20px;
     margin-bottom: 18px;
 }
 section.card > h2 {
     margin: 0 0 14px;
-    font-size: 1.05rem;
-    color: var(--blue);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
     text-transform: uppercase;
-    letter-spacing: 0.7px;
+    letter-spacing: 0.08em;
     font-weight: 700;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 .section-meta {
-    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    margin-left: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    background: var(--bg-raised);
+    font-family: var(--font-mono);
+    font-size: 10px;
     font-weight: 500;
-    text-transform: none;
-    letter-spacing: 0;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     color: var(--muted);
+    white-space: nowrap;
 }
+.section-meta:empty { display: none; }
 
 /* ── Forms ── */
 label {
+    font-family: var(--font-mono);
     font-weight: 600;
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: var(--muted);
+    letter-spacing: 0.08em;
+    color: var(--faint);
     margin-bottom: 4px;
     display: block;
 }
@@ -165,17 +279,26 @@ select,
 textarea {
     padding: 8px 11px;
     font-size: 14px;
-    border: 1.5px solid var(--border);
-    border-radius: 7px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
     width: 100%;
-    background: var(--card);
+    background: var(--bg-raised);
     color: var(--text);
-    transition: border-color 0.18s, box-shadow 0.18s;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
     font-family: inherit;
+}
+input[type="color"] {
+    width: 100%;
+    height: 36px;
+    padding: 3px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--bg-raised);
+    cursor: pointer;
 }
 input:focus, select:focus, textarea:focus {
     outline: none;
-    border-color: var(--primary);
+    border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .form-grid {
@@ -196,7 +319,7 @@ input:focus, select:focus, textarea:focus {
 /* ── Tables ── */
 .table-wrap {
     overflow-x: auto;
-    border-radius: 8px;
+    border-radius: var(--radius-control);
     border: 1px solid var(--border);
     background: var(--card);
 }
@@ -208,39 +331,45 @@ table {
 th, td {
     padding: 9px 11px;
     text-align: left;
-    border-bottom: 1px solid var(--grid-line);
+    border-bottom: 1px solid var(--border);
     white-space: nowrap;
 }
 th {
-    background: var(--card-alt);
-    font-size: 11px;
+    background: var(--card-chrome);
+    font-family: var(--font-mono);
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--muted);
-    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--faint);
+    font-weight: 600;
     position: sticky;
     top: 0;
     z-index: 1;
 }
-tbody tr:hover { background: var(--card-alt); }
+tbody tr:hover { background: var(--bg-raised); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.num { font-family: var(--font-mono); font-size: 12.5px; }
 th.sortable { cursor: pointer; user-select: none; }
-th.sortable:hover { color: var(--primary); }
+th.sortable:hover { color: var(--accent); }
 th.sortable .ind { margin-left: 4px; font-size: 10px; }
 .tag {
-    display: inline-block;
-    padding: 2px 8px;
-    background: var(--card-alt);
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 9px;
+    background: var(--bg-raised);
     border: 1px solid var(--border);
-    border-radius: 999px;
-    font-size: 11px;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     color: var(--muted);
     margin-right: 4px;
 }
-.tag.income { color: var(--success); border-color: var(--success); }
-.tag.expense { color: var(--danger); border-color: var(--danger); }
-.tag.transfer { color: var(--blue); border-color: var(--blue); }
-.tag.paused { color: var(--muted); background: var(--card-alt); }
+.tag.income { color: var(--live); border-color: var(--live); }
+.tag.expense { color: var(--down); border-color: var(--down); }
+.tag.transfer { color: var(--info); border-color: var(--info); }
+.tag.paused { color: var(--muted); background: var(--bg-raised); }
 
 .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
 
@@ -254,7 +383,7 @@ th.sortable .ind { margin-left: 4px; font-size: 10px; }
 /* ── Forecast grid ── */
 .forecast-wrap {
     overflow-x: auto;
-    border-radius: 8px;
+    border-radius: var(--radius-control);
     border: 1px solid var(--border);
     background: var(--card);
     max-height: 600px;
@@ -265,8 +394,9 @@ th.sortable .ind { margin-left: 4px; font-size: 10px; }
 }
 .forecast-wrap th, .forecast-wrap td {
     padding: 7px 9px;
-    border-right: 1px solid var(--grid-line);
+    border-right: 1px solid var(--border);
 }
+/* Sticky cells need OPAQUE backgrounds or scrolled rows bleed through. */
 .forecast-wrap th:first-child,
 .forecast-wrap td:first-child {
     position: sticky;
@@ -280,31 +410,32 @@ th.sortable .ind { margin-left: 4px; font-size: 10px; }
     text-overflow: ellipsis;
 }
 .forecast-wrap thead th:first-child {
-    background: var(--card-alt);
+    background: var(--card-chrome);
     z-index: 3;
 }
 .forecast-wrap tr.group-row td {
-    background: var(--card-alt);
+    background: var(--card-chrome);
+    font-family: var(--font-mono);
     font-weight: 700;
-    color: var(--blue);
-    font-size: 11px;
+    color: var(--muted);
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: 0.08em;
 }
 .forecast-wrap tr.summary-row td {
-    background: var(--card-alt);
+    background: var(--bg-raised);
     font-weight: 700;
     border-top: 2px solid var(--border);
 }
 .forecast-wrap tr.balance-row td {
-    background: var(--card-alt);
+    background: var(--bg-raised);
     font-weight: 700;
     border-top: 1px solid var(--border);
-    color: var(--primary);
+    color: var(--accent);
 }
-.forecast-wrap td.negative { color: var(--danger); font-weight: 600; }
-.forecast-wrap td.positive { color: var(--success); }
-.forecast-wrap td.balance-neg { background: rgba(220,38,38,0.15); color: var(--danger); font-weight: 700; }
+.forecast-wrap td.negative { color: var(--down); font-weight: 600; }
+.forecast-wrap td.positive { color: var(--live); }
+.forecast-wrap td.balance-neg { background: var(--down-tint); color: var(--down); font-weight: 700; }
 
 /* ── Charts ── */
 .charts-grid {
@@ -313,17 +444,18 @@ th.sortable .ind { margin-left: 4px; font-size: 10px; }
     gap: 16px;
 }
 .chart-card {
-    background: var(--card);
+    background: var(--bg-raised);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-control);
     padding: 14px 16px;
 }
 .chart-card h3 {
     margin: 0;
-    font-size: 13px;
+    font-family: var(--font-mono);
+    font-size: 11px;
     color: var(--muted);
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: 0.08em;
     font-weight: 700;
 }
 .chart-head {
@@ -334,6 +466,7 @@ th.sortable .ind { margin-left: 4px; font-size: 10px; }
     margin-bottom: 10px;
 }
 .chart-head .h-range {
+    font-family: var(--font-sans);
     color: var(--text);
     text-transform: none;
     letter-spacing: 0;
@@ -361,30 +494,32 @@ th.sortable .ind { margin-left: 4px; font-size: 10px; }
     gap: 12px;
 }
 .insight-card {
-    background: var(--card);
+    background: var(--bg-raised);
     border: 1px solid var(--border);
-    border-left: 4px solid var(--blue);
-    border-radius: 8px;
+    border-left: 3px solid var(--info);
+    border-radius: var(--radius-control);
     padding: 12px 14px;
 }
-.insight-card.positive { border-left-color: var(--success); }
-.insight-card.warning  { border-left-color: var(--warning); }
-.insight-card.danger   { border-left-color: var(--danger); }
-.insight-card.info     { border-left-color: var(--blue); }
-.insight-card.fact     { border-left-color: var(--purple); }
+.insight-card.positive { border-left-color: var(--live); }
+.insight-card.warning  { border-left-color: var(--warn); }
+.insight-card.danger   { border-left-color: var(--down); }
+.insight-card.info     { border-left-color: var(--info); }
+.insight-card.fact     { border-left-color: var(--magenta); }
 .insight-card .label {
-    font-size: 11px;
+    font-family: var(--font-mono);
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: var(--muted);
-    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--faint);
+    font-weight: 600;
     margin-bottom: 4px;
 }
 .insight-card .value {
     font-size: 1.35rem;
-    font-weight: 700;
+    font-weight: 650;
     margin-bottom: 2px;
     color: var(--text);
+    font-variant-numeric: tabular-nums;
 }
 .insight-card .sub {
     font-size: 12.5px;
@@ -398,35 +533,35 @@ footer.app-foot {
     padding-top: 16px;
     border-top: 1px solid var(--border);
     font-size: 13px;
-    color: var(--muted);
+    color: var(--faint);
 }
 footer.app-foot p { margin: 6px 0; }
-footer.app-foot a { color: var(--blue); text-decoration: none; }
-footer.app-foot a:hover { text-decoration: underline; }
+footer.app-foot a { color: var(--accent); text-decoration: none; }
+footer.app-foot a:hover { color: var(--accent-deep); text-decoration: underline; }
 
 /* ── Modal ── */
 .modal-overlay {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.45);
+    background: rgba(4, 6, 16, 0.6);
     display: flex; align-items: center; justify-content: center;
     z-index: 100;
     padding: 20px;
 }
 .modal {
     background: var(--card);
-    border-radius: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
     padding: 22px 24px;
     max-width: 520px;
     width: 100%;
     box-shadow: var(--shadow);
 }
-.modal h3 { margin: 0 0 12px; color: var(--blue); }
+.modal h3 { margin: 0 0 12px; color: var(--text); }
 .modal p { margin: 0 0 16px; }
 
 /* ── Responsive ── */
 @media (max-width: 700px) {
-    body { padding: 10px; }
-    .container { padding: 16px; }
+    body { padding: 12px 10px; }
     header.app-head { flex-direction: column; align-items: flex-start; }
     h1 { font-size: 1.4rem; }
     .header-controls { width: 100%; justify-content: flex-start; }
@@ -441,16 +576,16 @@ footer.app-foot a:hover { text-decoration: underline; }
     display: flex;
     gap: 18px;
     align-items: center;
-    background: linear-gradient(135deg, rgba(22,163,74,0.10), rgba(37,99,235,0.10));
+    background: linear-gradient(135deg, rgba(255,154,68,0.10), rgba(194,62,140,0.08));
     border: 1px solid var(--border);
-    border-left: 4px solid var(--primary);
-    border-radius: 10px;
+    border-left: 4px solid var(--accent);
+    border-radius: var(--radius-card);
     padding: 16px 20px;
     margin-bottom: 18px;
 }
 .intro-banner h3 {
     margin: 0 0 8px;
-    color: var(--primary);
+    color: var(--accent);
     font-size: 1.05rem;
 }
 .intro-banner p { margin: 0 0 6px; font-size: 13.5px; }
@@ -463,10 +598,10 @@ footer.app-foot a:hover { text-decoration: underline; }
     .intro-banner { flex-direction: column; align-items: stretch; }
     .intro-banner .intro-actions { flex-direction: row; }
 }
-a.guide-link { color: var(--primary); font-size: 12px; font-weight: 600; text-decoration: none; opacity: 0.85; white-space: nowrap; }
+a.guide-link { color: var(--accent); font-size: 12px; font-weight: 600; text-decoration: none; opacity: 0.9; white-space: nowrap; }
 a.guide-link:hover { text-decoration: underline; opacity: 1; }
-.danger-text { color: var(--danger); }
-.success-text { color: var(--success); }
+.danger-text { color: var(--down); }
+.success-text { color: var(--live); }
 .muted-text { color: var(--muted); font-size: 12px; }
 .spacer { flex: 1; }
 </style>
@@ -476,6 +611,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 
 <header class="app-head">
     <div class="brand">
+        <a class="kicker" href="https://observation-deck.netlify.app/">Observation Deck / Cashflow Compass</a>
         <h1>🧭 Cashflow Compass</h1>
         <p class="tagline">Navigate your cashflow — up to 36 months out <span style="white-space:nowrap">&nbsp;|&nbsp;<a href="guide.html" class="guide-link">How to get Started →</a></span></p>
     </div>
@@ -597,7 +733,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
             </div>
             <div>
                 <label>Color</label>
-                <input type="color" id="catColor" value="#16a34a">
+                <input type="color" id="catColor" value="#ff9a44">
             </div>
             <div class="form-actions">
                 <button type="button" id="catCancelBtn" class="ghost hidden">Cancel</button>
@@ -825,7 +961,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
  *  charts, insights, Excel/JSON round-trip.
  * ========================================================= */
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const STORAGE_KEY = 'projectBudgetingState';
 
 // Horizon options shared by global selector + per-chart toggles.
@@ -865,25 +1001,37 @@ const V1_DEFAULT_COLORS = {
     cat_retirement: '#a78bfa', cat_debt: '#dc2626',    cat_tax: '#b91c1c'
 };
 
+// Colors shipped in v2/v3 — used (like V1_DEFAULT_COLORS) to detect categories
+// still on the old default palette so they can be re-skinned to the deck palette.
+const V3_DEFAULT_COLORS = {
+    cat_salary: '#16a34a',  cat_other_inc: '#65a30d', cat_housing: '#2563eb',
+    cat_utilities: '#f59e0b', cat_internet: '#06b6d4', cat_phone: '#14b8a6',
+    cat_insurance: '#6366f1', cat_subs: '#a855f7',    cat_electric: '#eab308',
+    cat_groceries: '#84cc16', cat_gas: '#ec4899',     cat_dining: '#ea580c',
+    cat_entertain: '#d946ef', cat_shopping: '#f43f5e', cat_savings: '#7c3aed',
+    cat_retirement: '#0ea5e9', cat_debt: '#dc2626',   cat_tax: '#92400e'
+};
+
+// Observation Deck palette — bright enough to read on the navy card surfaces.
 const DEFAULT_CATEGORIES = [
-    { id: 'cat_salary',     name: 'Salary',           kind: 'income',        color: '#16a34a' },
-    { id: 'cat_other_inc',  name: 'Other Income',     kind: 'income',        color: '#65a30d' },
-    { id: 'cat_housing',    name: 'Housing',          kind: 'fixed',         color: '#2563eb' },
-    { id: 'cat_utilities',  name: 'Utilities',        kind: 'fixed',         color: '#f59e0b' },
-    { id: 'cat_internet',   name: 'Home Internet',    kind: 'fixed',         color: '#06b6d4' },
-    { id: 'cat_phone',      name: 'Phone Bill',       kind: 'fixed',         color: '#14b8a6' },
-    { id: 'cat_insurance',  name: 'Insurance',        kind: 'fixed',         color: '#6366f1' },
-    { id: 'cat_subs',       name: 'Subscriptions',    kind: 'fixed',         color: '#a855f7' },
-    { id: 'cat_electric',   name: 'Electric',         kind: 'variable',      color: '#eab308' },
-    { id: 'cat_groceries',  name: 'Groceries',        kind: 'variable',      color: '#84cc16' },
-    { id: 'cat_gas',        name: 'Gas / Transport',  kind: 'variable',      color: '#ec4899' },
-    { id: 'cat_dining',     name: 'Dining',           kind: 'discretionary', color: '#ea580c' },
+    { id: 'cat_salary',     name: 'Salary',           kind: 'income',        color: '#3ddc84' },
+    { id: 'cat_other_inc',  name: 'Other Income',     kind: 'income',        color: '#a3e635' },
+    { id: 'cat_housing',    name: 'Housing',          kind: 'fixed',         color: '#ff9a44' },
+    { id: 'cat_utilities',  name: 'Utilities',        kind: 'fixed',         color: '#ffc24b' },
+    { id: 'cat_internet',   name: 'Home Internet',    kind: 'fixed',         color: '#5b8def' },
+    { id: 'cat_phone',      name: 'Phone Bill',       kind: 'fixed',         color: '#22d3ee' },
+    { id: 'cat_insurance',  name: 'Insurance',        kind: 'fixed',         color: '#8b7cf6' },
+    { id: 'cat_subs',       name: 'Subscriptions',    kind: 'fixed',         color: '#c23e8c' },
+    { id: 'cat_electric',   name: 'Electric',         kind: 'variable',      color: '#f5d90a' },
+    { id: 'cat_groceries',  name: 'Groceries',        kind: 'variable',      color: '#45d0c0' },
+    { id: 'cat_gas',        name: 'Gas / Transport',  kind: 'variable',      color: '#f472b6' },
+    { id: 'cat_dining',     name: 'Dining',           kind: 'discretionary', color: '#ff785a' },
     { id: 'cat_entertain',  name: 'Entertainment',    kind: 'discretionary', color: '#d946ef' },
-    { id: 'cat_shopping',   name: 'Shopping',         kind: 'discretionary', color: '#f43f5e' },
-    { id: 'cat_savings',    name: 'Savings',          kind: 'savings',       color: '#7c3aed' },
-    { id: 'cat_retirement', name: 'Retirement',       kind: 'savings',       color: '#0ea5e9' },
-    { id: 'cat_debt',       name: 'Debt Payment',     kind: 'debt',          color: '#dc2626' },
-    { id: 'cat_tax',        name: 'Taxes',            kind: 'tax',           color: '#92400e' }
+    { id: 'cat_shopping',   name: 'Shopping',         kind: 'discretionary', color: '#fda4af' },
+    { id: 'cat_savings',    name: 'Savings',          kind: 'savings',       color: '#60a5fa' },
+    { id: 'cat_retirement', name: 'Retirement',       kind: 'savings',       color: '#38bdf8' },
+    { id: 'cat_debt',       name: 'Debt Payment',     kind: 'debt',          color: '#ff5c5c' },
+    { id: 'cat_tax',        name: 'Taxes',            kind: 'tax',           color: '#c9a26d' }
 ];
 
 const FREQUENCY_LABELS = {
@@ -955,7 +1103,7 @@ function defaultState() {
             currency: 'USD',
             forecastHorizon: '12',
             chartHorizons: {},
-            theme: 'light'
+            theme: 'auto'   // 'auto' follows the OS; 'light'/'dark' are manual overrides
         },
         accounts: [],
         categories: structuredClone(DEFAULT_CATEGORIES),
@@ -1002,6 +1150,20 @@ function migrate(s) {
         delete s.settings.forecastMonths;
         if (!s.settings.chartHorizons) s.settings.chartHorizons = {};
     }
+    // v3 → v4 (Observation Deck theme): re-skin default category colors to the
+    // deck palette when they still match the old defaults (preserve customizations),
+    // and move 'light' (the old implicit default) to 'auto' so dark-first + OS
+    // preference takes over. Users who explicitly chose dark keep dark.
+    if (fromVersion < 4) {
+        DEFAULT_CATEGORIES.forEach(def => {
+            const cur = s.categories.find(c => c.id === def.id);
+            if (cur && (cur.color || '').toLowerCase() === (V3_DEFAULT_COLORS[def.id] || '').toLowerCase()) {
+                cur.color = def.color;
+            }
+        });
+        if (s.settings.theme === 'light') s.settings.theme = 'auto';
+    }
+    if (!['auto', 'light', 'dark'].includes(s.settings.theme)) s.settings.theme = 'auto';
     if (!s.settings.forecastHorizon) s.settings.forecastHorizon = '12';
     if (!s.settings.chartHorizons) s.settings.chartHorizons = {};
     if (!s.transactions) s.transactions = [];
@@ -1400,7 +1562,7 @@ document.getElementById('categoryForm').addEventListener('submit', e => {
         state.categories.push({ id: uid('cat'), ...data });
     }
     e.target.reset();
-    document.getElementById('catColor').value = '#16a34a';
+    document.getElementById('catColor').value = '#ff9a44';
     document.getElementById('catSubmitBtn').textContent = 'Add Category';
     document.getElementById('catCancelBtn').classList.add('hidden');
     saveState();
@@ -1410,7 +1572,7 @@ document.getElementById('categoryForm').addEventListener('submit', e => {
 document.getElementById('catCancelBtn').onclick = () => {
     editingCatId = null;
     document.getElementById('categoryForm').reset();
-    document.getElementById('catColor').value = '#16a34a';
+    document.getElementById('catColor').value = '#ff9a44';
     document.getElementById('catSubmitBtn').textContent = 'Add Category';
     document.getElementById('catCancelBtn').classList.add('hidden');
 };
@@ -1719,10 +1881,27 @@ function renderForecast(forecast) {
 
 /* ───── Charts ───── */
 
-const chartFontColor = () =>
-    state.settings.theme === 'dark' ? '#e6e8eb' : '#222';
-const chartGridColor = () =>
-    state.settings.theme === 'dark' ? '#2a313b' : '#e6e8eb';
+/* Deck chart theming: colors are read from the CSS variables at chart-build
+ * time so charts always match the active theme (incl. mid-session OS flips). */
+function deckChartTheme() {
+    const css = getComputedStyle(document.documentElement);
+    const v = n => css.getPropertyValue(n).trim();
+    const dark = effectiveTheme() === 'dark';
+    Chart.defaults.color = v('--muted');
+    Chart.defaults.borderColor = dark ? 'rgba(255,255,255,0.07)' : '#e3e5f0';
+    Chart.defaults.font.family = v('--font-sans');
+    Chart.defaults.plugins.tooltip.backgroundColor = v('--bg-raised');
+    Chart.defaults.plugins.tooltip.titleColor = v('--text');
+    Chart.defaults.plugins.tooltip.bodyColor = v('--muted');
+    Chart.defaults.plugins.tooltip.borderColor = dark ? 'rgba(255,255,255,0.09)' : '#dcdeeb';
+    Chart.defaults.plugins.tooltip.borderWidth = 1;
+    return {
+        accent: v('--accent'), accentDeep: v('--accent-deep'), magenta: v('--magenta'),
+        live: v('--live'), warn: v('--warn'), down: v('--down'),
+        muted: v('--muted'), faint: v('--faint'), card: v('--card'),
+        accentFill: dark ? 'rgba(255,154,68,0.12)' : 'rgba(232,121,43,0.12)'
+    };
+}
 
 function destroyCharts() {
     Object.keys(charts).forEach(k => { if (charts[k]) { charts[k].destroy(); delete charts[k]; } });
@@ -1756,7 +1935,7 @@ const moneyTooltip = {
 };
 
 const chartRenderers = {
-    monthly(months) {
+    monthly(months, T) {
         const fc = getForecast(months);
         const labels = fc.monthList.map(m => m.label);
         charts.monthly = new Chart(document.getElementById('chartMonthly'), {
@@ -1764,9 +1943,9 @@ const chartRenderers = {
             data: {
                 labels,
                 datasets: [
-                    { label: 'Income',   data: fc.monthlyIncome,                  backgroundColor: 'rgba(22,163,74,0.85)' },
-                    { label: 'Expenses', data: fc.monthlyExpense.map(n => -n),    backgroundColor: 'rgba(220,38,38,0.85)' },
-                    { label: 'Net',      data: fc.monthlyNet,                     type: 'line', borderColor: '#2563eb', backgroundColor: '#2563eb', tension: 0.25, yAxisID: 'y' }
+                    { label: 'Income',   data: fc.monthlyIncome,                  backgroundColor: T.live + 'D9' },
+                    { label: 'Expenses', data: fc.monthlyExpense.map(n => -n),    backgroundColor: T.down + 'D9' },
+                    { label: 'Net',      data: fc.monthlyNet,                     type: 'line', borderColor: T.accent, backgroundColor: T.accent, tension: 0.25, yAxisID: 'y' }
                 ]
             },
             options: { responsive: true, maintainAspectRatio: false,
@@ -1774,22 +1953,22 @@ const chartRenderers = {
                 plugins: { tooltip: moneyTooltip } }
         });
     },
-    balance(months) {
+    balance(months, T) {
         const fc = getForecast(months);
         const labels = fc.monthList.map(m => m.label);
         charts.balance = new Chart(document.getElementById('chartBalance'), {
             type: 'line',
             data: { labels, datasets: [{
                 label: 'Projected Balance', data: fc.runningBalance,
-                fill: true, borderColor: '#16a34a',
-                backgroundColor: 'rgba(22,163,74,0.15)', tension: 0.3
+                fill: true, borderColor: T.accent,
+                backgroundColor: T.accentFill, tension: 0.3
             }] },
             options: { responsive: true, maintainAspectRatio: false,
                 scales: { y: { ticks: { callback: v => fmtMoney(v, {compact:true}) } } },
                 plugins: { tooltip: moneyTooltip } }
         });
     },
-    category(months) {
+    category(months, T) {
         const fc = getForecast(months);
         const totals = state.categories
             .filter(c => c.kind !== 'income')
@@ -1801,13 +1980,13 @@ const chartRenderers = {
         charts.category = new Chart(document.getElementById('chartCategory'), {
             type: 'doughnut',
             data: { labels: totals.map(e => e.name),
-                datasets: [{ data: totals.map(e => e.total), backgroundColor: totals.map(e => e.color) }] },
+                datasets: [{ data: totals.map(e => e.total), backgroundColor: totals.map(e => e.color), borderColor: T.card }] },
             options: { responsive: true, maintainAspectRatio: false,
                 plugins: { legend: { position: 'right', labels: { boxWidth: 12 } },
                     tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtMoney(ctx.parsed)}` } } } }
         });
     },
-    trend(months) {
+    trend(months, T) {
         const fc = getForecast(months);
         const labels = fc.monthList.map(m => m.label);
         const cats = state.categories.filter(c => c.kind !== 'income' && fc.monthlyByCategory[c.id]);
@@ -1826,7 +2005,7 @@ const chartRenderers = {
                 } }
         });
     },
-    top(months) {
+    top(months, T) {
         const fc = getForecast(months);
         // Sum each expense transaction's outflow over the horizon.
         const items = state.transactions
@@ -1839,7 +2018,7 @@ const chartRenderers = {
         charts.top = new Chart(document.getElementById('chartTop'), {
             type: 'bar',
             data: { labels: items.map(x => x.name),
-                datasets: [{ label: 'Cost over period', data: items.map(x => x.amt), backgroundColor: '#ea580c' }] },
+                datasets: [{ label: 'Cost over period', data: items.map(x => x.amt), backgroundColor: T.accent }] },
             options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                 scales: { x: { ticks: { callback: v => fmtMoney(v, {compact:true}) } } },
                 plugins: {
@@ -1848,7 +2027,7 @@ const chartRenderers = {
                 } }
         });
     },
-    income(months) {
+    income(months, T) {
         const fc = getForecast(months);
         const incomeCats = state.categories.filter(c => c.kind === 'income');
         const totals = incomeCats.map(c => {
@@ -1858,7 +2037,7 @@ const chartRenderers = {
         charts.income = new Chart(document.getElementById('chartIncome'), {
             type: 'doughnut',
             data: { labels: totals.map(x => x.name),
-                datasets: [{ data: totals.map(x => x.total), backgroundColor: totals.map(x => x.color) }] },
+                datasets: [{ data: totals.map(x => x.total), backgroundColor: totals.map(x => x.color), borderColor: T.card }] },
             options: { responsive: true, maintainAspectRatio: false,
                 plugins: { legend: { position: 'right', labels: { boxWidth: 12 } },
                     tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtMoney(ctx.parsed)}` } } } }
@@ -1868,24 +2047,20 @@ const chartRenderers = {
 
 function renderChart(key) {
     if (charts[key]) { charts[key].destroy(); delete charts[key]; }
-    Chart.defaults.color = chartFontColor();
-    Chart.defaults.borderColor = chartGridColor();
-    Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, Segoe UI, Arial';
+    const T = deckChartTheme();
     const months = chartHorizonMonths(key);
     setChartRange(key, months);
-    chartRenderers[key](months);
+    chartRenderers[key](months, T);
 }
 
 function renderCharts() {
     destroyCharts();
     clearForecastCache();
-    Chart.defaults.color = chartFontColor();
-    Chart.defaults.borderColor = chartGridColor();
-    Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, Segoe UI, Arial';
+    const T = deckChartTheme();
     CHART_KEYS.forEach(k => {
         const months = chartHorizonMonths(k);
         setChartRange(k, months);
-        chartRenderers[k](months);
+        chartRenderers[k](months, T);
     });
 }
 
@@ -2122,7 +2297,7 @@ function importExcelArrayBuffer(ab) {
             if (k === 'currency')             newState.settings.currency = String(v || 'USD');
             else if (k === 'forecastHorizon') newState.settings.forecastHorizon = String(v || '12');
             else if (k === 'forecastMonths')  newState.settings.forecastHorizon = String(parseInt(v) || 12);
-            else if (k === 'theme')           newState.settings.theme = String(v || 'light');
+            else if (k === 'theme')           newState.settings.theme = ['auto','light','dark'].includes(String(v)) ? String(v) : 'auto';
         });
     }
 
@@ -2145,7 +2320,7 @@ function importExcelArrayBuffer(ab) {
             id: r.id || uid('cat'),
             name: String(r.name || '').trim(),
             kind: String(r.kind || 'variable'),
-            color: String(r.color || '#16a34a')
+            color: String(r.color || '#ff9a44')
         })).filter(c => c.name);
         if (newState.categories.length === 0) newState.categories = structuredClone(DEFAULT_CATEGORIES);
     }
@@ -2221,17 +2396,36 @@ function importJsonText(text) {
 
 /* ───── Theme ───── */
 
+// 'auto' follows the OS via prefers-color-scheme (dark is the deck default);
+// clicking the toggle pins an explicit 'light'/'dark' override.
+function effectiveTheme() {
+    const t = state.settings.theme;
+    if (t === 'dark' || t === 'light') return t;
+    return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
 function applyTheme() {
-    document.documentElement.setAttribute('data-theme', state.settings.theme);
-    document.getElementById('themeToggle').textContent = state.settings.theme === 'dark' ? '☀️' : '🌙';
+    const t = state.settings.theme;
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+    else document.documentElement.removeAttribute('data-theme');
+    const btn = document.getElementById('themeToggle');
+    btn.textContent = effectiveTheme() === 'dark' ? '☀️' : '🌙';
+    btn.title = `Theme: ${t === 'auto' ? 'auto (follows OS)' : t} — click to switch`;
 }
 
 document.getElementById('themeToggle').onclick = () => {
-    state.settings.theme = state.settings.theme === 'dark' ? 'light' : 'dark';
+    state.settings.theme = effectiveTheme() === 'dark' ? 'light' : 'dark';
     applyTheme();
     saveState();
     if (Object.keys(charts).length) renderCharts();
 };
+
+// Mid-session OS theme flips: restyle page + rebuild charts when following the OS.
+matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+    if (state.settings.theme === 'dark' || state.settings.theme === 'light') return;
+    applyTheme();
+    if (Object.keys(charts).length) renderCharts();
+});
 
 /* ───── Currency / horizon ───── */
 
