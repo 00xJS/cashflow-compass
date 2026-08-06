@@ -54,7 +54,7 @@ A **[Getting Started guide](guide.html)** is built into the app (linked in the h
 
 ### Forecast grid
 - Rows grouped by category kind (Income → Fixed → Variable → Discretionary → Savings → Debt → Tax)
-- **Fixed** group is auto-organized: monthly subscriptions first (highest dollar first), then annual subscriptions (highest first), then everything else
+- **Fixed** group is auto-organized by frequency, largest amount first within each band: weekly → quarterly items first, then semi-annual and annual, then one-time and custom. (So a $900 monthly rent leads the group, and a $1,200 annual insurance premium sorts below a $12 monthly subscription — annual bills are grouped together rather than by size alone.)
 - Per-month columns plus a Total column on the right
 - Summary rows at the bottom: Total Income, Total Expenses, Net Cash Flow, End-of-Month Balance
 - Negative balances flagged in red so cash crunches jump out
@@ -72,6 +72,9 @@ A **[Getting Started guide](guide.html)** is built into the app (linked in the h
 Every chart has its own horizon dropdown — you can keep most charts on the global setting and override one or two ("show Running Balance for 36 months but everything else for End of Year"). Hover any chart for tooltips formatted as proper currency (`$1,234.56`).
 
 ### Insights panel (auto-generated)
+
+Up to eight cards, each shown only when your data supports it — a budget with no income stream, no subscriptions, and a zero starting balance produces five rather than eight.
+
 1. **Average Savings Rate** — what % of income you keep across the horizon
 2. **Biggest Category** — single largest expense category as a % of total spend
 3. **Annual Subscription Cost** — annualized burn for everything in the Subscriptions category
@@ -155,4 +158,10 @@ Pull requests welcome.
 
 ---
 
-[Observation Deck](https://observation-deck.netlify.app/) | [GitHub](https://github.com/00xJS/cashflow-compass)
+## License
+
+[MIT](LICENSE) — do what you like with it, no warranty.
+
+---
+
+[Observation Deck](https://observation-deck.netlify.app/) · [GitHub](https://github.com/00xJS/cashflow-compass)
