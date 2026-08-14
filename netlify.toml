@@ -1,59 +1,34 @@
 # ============================================================================
 #  Cashflow Compass — Netlify configuration
 #
-#  DEPLOY HAZARD (known, deliberately not fixed in this pass)
-#  ----------------------------------------------------------------------------
-#  publish is "." — the repository root — so a *drag-and-drop* deploy uploads
-#  every file sitting in the folder, not just the ones the site needs. That
-#  includes THEME-HANDOFF.md (marked "Local only — gitignored"), the .claude/
-#  tooling directory, and the entire .git/ history. A Git-backed deploy never
-#  sees them because .gitignore excludes them; a manual folder drop does not
-#  consult .gitignore at all.
+#  publish = "site" is a privacy control, not just tidiness. Only what lives in
+#  site/ is uploaded, so repository files physically cannot ride along on a
+#  deploy — including THEME-HANDOFF.md (marked "Local only — gitignored"), the
+#  .claude/ tooling directory, this config, and .git/ history.
 #
-#  The proper fix is to move the shipping files into a publish subfolder
-#  (publish = "site") so nothing else can ride along. That is a path move, and
-#  it was deferred to avoid renaming files while other work is in flight.
+#  A drag-and-drop deploy of the repository root previously uploaded all of it,
+#  because a manual folder drop never consults .gitignore. Blocking those paths
+#  with redirect rules only stopped them being *served* — the bytes still
+#  reached the CDN. Keeping the deployable files in their own folder removes
+#  the problem at the source, so no blocklist has to be maintained.
 #
-#  Until then the redirects below return 404 for those paths, so the files are
-#  unreadable even when they have been uploaded. Note this is a mitigation, not
-#  the fix: the bytes are still on the CDN, they are just not served.
+#  Deploy by pointing Netlify at site/, or drag the site/ folder itself.
 # ============================================================================
 
 [build]
-  publish = "."
-
-# force = true is required: without it these rules only apply when no file
-# matches, which is exactly the case that needs blocking. `to` is mandatory in a
-# redirect rule; with status = 404 the target is what gets rendered as the error
-# body, so it points at a page that is public anyway.
-[[redirects]]
-  from = "/THEME-HANDOFF.md"
-  to = "/index.html"
-  status = 404
-  force = true
-
-[[redirects]]
-  from = "/.claude/*"
-  to = "/index.html"
-  status = 404
-  force = true
-
-[[redirects]]
-  from = "/.git/*"
-  to = "/index.html"
-  status = 404
-  force = true
+  publish = "site"
 
 # ----------------------------------------------------------------------------
 #  Content-Security-Policy — the privacy promise, machine-enforced
 #
-#  Both libraries (Chart.js, SheetJS) are vendored under vendor/, so the app
-#  needs nothing external and every fetch directive can be locked to 'self'.
+#  Both libraries (Chart.js, SheetJS) are vendored under site/vendor/, so the
+#  app needs nothing external and every fetch directive can be locked to 'self'.
 #
 #  style-src needs 'unsafe-inline': index.html carries its whole stylesheet in an
-#  inline <style> block, and both index.html and app.js write style="" attributes
-#  that interpolate category colours. script-src does NOT need it — every script
-#  in index.html is a <script src>, and there are no inline event handlers.
+#  inline <style> block, the feature modules inject their own <style> elements,
+#  and category colours are written into style="" attributes. script-src does
+#  NOT need it — every script is a <script src>, and there are no inline event
+#  handlers. tests.html asserts both of those stay true.
 #
 #  connect-src is 'self', not 'none'. sw.js is served from this origin and so
 #  inherits this policy; inside a service worker, connect-src governs the

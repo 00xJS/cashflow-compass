@@ -10,9 +10,9 @@ It is a **forecasting** app first: you describe the money you expect to move, an
 
 Part of the [Observation Deck](https://observation-deck.netlify.app/) family of personal tools.
 
-No build step, no backend, no account sign-up, no network requests — open `index.html` and start budgeting. Everything, including the two vendored libraries, is served from the folder, so the app works fully offline. Your data lives in your browser's LocalStorage and travels with you via the file you export.
+No build step, no backend, no account sign-up, no network requests — open `site/index.html` and start budgeting. Everything, including the two vendored libraries, is served from the folder, so the app works fully offline. Your data lives in your browser's LocalStorage and travels with you via the file you export.
 
-A **[Getting Started guide](guide.html)** is built into the app (linked in the header) and covers every feature in depth — accounts and transfers, the credit-card model, categories, frequencies, the forecast grid, charts, insights, check-ins, importing your bank's file, plan-vs-actual, the debt planner, goals, the bills calendar, scenarios, backups and encryption, and pro tips.
+A **[Getting Started guide](site/guide.html)** is built into the app (linked in the header) and covers every feature in depth — accounts and transfers, the credit-card model, categories, frequencies, the forecast grid, charts, insights, check-ins, importing your bank's file, plan-vs-actual, the debt planner, goals, the bills calendar, scenarios, backups and encryption, and pro tips.
 
 <!-- Screenshot placeholder — no image file is committed yet. -->
 > **📸 Screenshot wanted.** Save a capture of the forecast grid with the charts below it to `docs/screenshot.png`, then replace this block with:
@@ -22,7 +22,7 @@ A **[Getting Started guide](guide.html)** is built into the app (linked in the h
 
 ## Quick start
 
-1. Try the [live demo](https://cashflow-comp.netlify.app/), **or** open `index.html` in any modern browser (Chrome, Safari, Firefox, Edge), **or** deploy the folder to Netlify (drag-and-drop or `netlify deploy`). All three are the same app; your data stays in whichever browser you used.
+1. Try the [live demo](https://cashflow-comp.netlify.app/), **or** open `site/index.html` in any modern browser (Chrome, Safari, Firefox, Edge), **or** deploy the `site/` folder to Netlify (drag-and-drop or `netlify deploy`). All three are the same app; your data stays in whichever browser you used.
 2. **Add an account** — give it a starting balance and the date that balance was true ("as of"). The forecast counts money forward from the latest as-of date across your accounts, so anything already paid before that date isn't replayed on top of the balance you entered. Add as many accounts as you like (checking, savings, credit, investment, cash).
 3. **Add transactions** — recurring or one-time, income / expense / transfer, with the frequency that matches reality (bi-weekly paycheck, monthly rent, annual insurance, etc.).
 4. Scroll down — the **Forecast grid**, **Charts**, and **Insights** populate automatically.
@@ -252,7 +252,7 @@ Put that file in a cloud-synced folder — iCloud Drive, Dropbox, OneDrive, Goog
 
 ### Persistence and privacy
 - All data is stored in your browser's **LocalStorage** with debounced auto-save (plus the connected file, if you're using live workbook mode)
-- **The app makes no network requests.** No fetch, no analytics, no telemetry, no CDN, no external fonts or images — Chart.js and SheetJS are vendored in `vendor/` and loaded from disk. Nothing to leak, nothing to block, and it runs fully offline from `file://`
+- **The app makes no network requests.** No fetch, no analytics, no telemetry, no CDN, no external fonts or images — Chart.js and SheetJS are vendored in `site/vendor/` and loaded from disk. Nothing to leak, nothing to block, and it runs fully offline from `file://`
 - Reading a file *you* chose from your disk — an import, or a connected live workbook — is not a network request. Nothing leaves the machine
 - **It will never link to a bank.** No Plaid, no SimpleFIN, no open banking, no OAuth, no credentials — a permanent, deliberate design choice, not a missing feature. Opening a statement file you downloaded yourself is a different thing entirely, and that is [built](#importing-actuals-from-a-file-you-downloaded-yourself)
 - **Completely free, forever.** No tiers, no subscription, no paid features, no licence to buy. There is nothing to sell you because there is no service behind it
@@ -272,22 +272,36 @@ Put that file in a cloud-synced folder — iCloud Drive, Dropbox, OneDrive, Goog
 
 ## Tech stack
 
-Vanilla HTML / CSS / JS, no framework. Eight files do the work:
+Vanilla HTML / CSS / JS, no framework. Everything the site needs lives in `site/`; everything else in the repository is for people, not browsers.
 
-| File | Contains |
-|---|---|
-| `index.html` | Markup, CSS (Observation Deck design tokens), and the `<script src>` tags — no inline logic |
-| `engine.js` | Pure forecast logic with no DOM access: the schema, date and frequency maths, `buildForecast`, `computeInsights`, variance, drift, volatility, payoff and goal maths, formatting |
-| `app.js` | The DOM layer: storage, rendering, charts, Excel/JSON import/export, event wiring |
-| `importers.js` | Parsers for the files you downloaded from your bank — CSV (with the mapping wizard), OFX/QFX, QIF, camt.053 |
-| `features.js` | The reality-check and planning panels: check-ins, per-account balances, plan-vs-actual, debt payoff, goals, the pay-vs-bills calendar, scenarios |
-| `portability.js` | Live workbook mode (File System Access API) and passphrase encryption (WebCrypto) |
-| `guide.html` | The built-in Getting Started guide (deliberately script-free) |
-| `tests.html` | Browser test suite exercising `engine.js` — open it, no build step, no runner to install |
+```
+site/           ← the whole app. This is what gets deployed
+  index.html    Markup, CSS (Observation Deck design tokens), and the <script src> tags — no inline logic
+  engine.js     Pure forecast logic with no DOM access: the schema, date and frequency maths,
+                buildForecast, computeInsights, variance, drift, volatility, payoff and goal maths, formatting
+  app.js        The DOM layer: storage, rendering, charts, Excel/JSON import/export, event wiring
+  importers.js  Parsers for the files you downloaded from your bank — CSV (with the mapping wizard),
+                OFX/QFX, QIF, camt.053
+  features.js   The reality-check and planning panels: check-ins, per-account balances, plan-vs-actual,
+                debt payoff, goals, the pay-vs-bills calendar, scenarios
+  portability.js Live workbook mode (File System Access API) and passphrase encryption (WebCrypto)
+  guide.html    The built-in Getting Started guide (deliberately script-free)
+  tests.html    Browser test suite exercising engine.js — open it, no build step, no runner to install
+  sw.js         Offline shell (service worker), manifest.webmanifest, icon.svg
+  vendor/       Chart.js and SheetJS, vendored
+netlify.toml    Publish config and security headers
+README.md, LICENSE
+```
+
+`site/` is a privacy boundary as much as a folder. Netlify publishes only that directory, so nothing
+else in the repository can ride along on a deploy — not the `.claude/` tooling directory, not local
+notes, not `.git/`. A drag-and-drop deploy of a project root uploads whatever is sitting in it,
+because a manual folder drop never consults `.gitignore`; keeping the shipping files separate removes
+that risk at the source instead of maintaining a blocklist.
 
 - Every script is a **classic script sharing global scope** — no ES modules, no imports, no bundler, so `file://` keeps working. They load in the order above; the later files extend the earlier ones by wrapping their render functions
-- [Chart.js](https://www.chartjs.org/) 4.4.4 and [SheetJS](https://sheetjs.com/) 0.20.3 are **vendored in `vendor/`** and loaded locally; notices in [`vendor/LICENSES.md`](vendor/LICENSES.md)
-- Netlify for static hosting (`netlify.toml` included, with a CSP that forbids outbound connections)
+- [Chart.js](https://www.chartjs.org/) 4.4.4 and [SheetJS](https://sheetjs.com/) 0.20.3 are **vendored in `site/vendor/`** and loaded locally; notices in [`site/vendor/LICENSES.md`](site/vendor/LICENSES.md)
+- Netlify for static hosting (`netlify.toml` included, publishing `site/` with a CSP that forbids outbound connections)
 - No build step, no package manager, no `package.json`, no Node required
 
 ---
@@ -297,12 +311,11 @@ Vanilla HTML / CSS / JS, no framework. Eight files do the work:
 `tests.html` is the whole test setup. There is nothing to install and no runner to configure — it is a plain page that loads `engine.js` and asserts against it.
 
 ```bash
-# From the project folder:
-python3 -m http.server 8000
+cd site && python3 -m http.server 8000
 # then open http://localhost:8000/tests.html
 ```
 
-You can also just double-click `tests.html` to open it from disk. The engine suites run either way; the **constraint-guard** suite is skipped on `file://`, because it works by reading the app's own source files as text and a page opened from disk isn't allowed to read its siblings. A banner at the top of the page tells you which mode you're in, and the summary reports passes, failures and skips.
+You can also just double-click `site/tests.html` to open it from disk. The engine suites run either way; the **constraint-guard** suite is skipped on `file://`, because it works by reading the app's own source files as text and a page opened from disk isn't allowed to read its siblings. A banner at the top of the page tells you which mode you're in, and the summary reports passes, failures and skips.
 
 The constraint guard is the section worth knowing about: it scans the source for `fetch`, `XMLHttpRequest`, `WebSocket`, `sendBeacon`, `EventSource`, `RTCPeerConnection` and any external URL, and fails the suite if it finds one. It exists so the "nothing leaves the machine" promise is enforced by a test rather than by anyone's memory of having made it.
 
@@ -343,19 +356,19 @@ No build step and no dependencies to install — edit a file and refresh the bro
 
 | Editing | File |
 |---|---|
-| Markup, CSS, design tokens | `index.html` |
-| Forecast maths, schema, migrations, insights, variance, payoff, goals | `engine.js` |
-| Rendering, storage, charts, Excel/JSON import/export, events | `app.js` |
-| Bank-file parsers (CSV / OFX / QFX / QIF / camt.053) | `importers.js` |
-| Check-ins, per-account balances, plan-vs-actual, debt payoff, goals, calendar, scenarios | `features.js` |
-| Live workbook mode and encrypted export | `portability.js` |
-| The Getting Started guide | `guide.html` |
-| Engine tests | `tests.html` |
+| Markup, CSS, design tokens | `site/index.html` |
+| Forecast maths, schema, migrations, insights, variance, payoff, goals | `site/engine.js` |
+| Rendering, storage, charts, Excel/JSON import/export, events | `site/app.js` |
+| Bank-file parsers (CSV / OFX / QFX / QIF / camt.053) | `site/importers.js` |
+| Check-ins, per-account balances, plan-vs-actual, debt payoff, goals, calendar, scenarios | `site/features.js` |
+| Live workbook mode and encrypted export | `site/portability.js` |
+| The Getting Started guide | `site/guide.html` |
+| Engine tests | `site/tests.html` |
 
 House rules worth knowing before you open a PR:
 
-- **Nothing may leave the machine.** No `fetch`, `XMLHttpRequest`, WebSocket, `sendBeacon`, `EventSource`, `RTCPeerConnection`, external fonts, images, or scripts. The constraint-guard suite in `tests.html` enforces this by reading the source. New dependencies get vendored into `vendor/` with a notice in `vendor/LICENSES.md`, or they don't land
-- **No build step, no `package.json`, no ES modules** — every script is a classic script sharing global scope so opening `index.html` from disk keeps working. New files load after `app.js` and hook in by wrapping the existing render functions
+- **Nothing may leave the machine.** No `fetch`, `XMLHttpRequest`, WebSocket, `sendBeacon`, `EventSource`, `RTCPeerConnection`, external fonts, images, or scripts. The constraint-guard suite in `tests.html` enforces this by reading the source. New dependencies get vendored into `site/vendor/` with a notice in `site/vendor/LICENSES.md`, or they don't land
+- **No build step, no `package.json`, no ES modules** — every script is a classic script sharing global scope so opening `site/index.html` from disk keeps working. New files load after `app.js` and hook in by wrapping the existing render functions
 - **`engine.js` stays DOM-free**, which is what lets `tests.html` exercise it directly. Anything pure belongs there; anything that touches the document belongs in one of the UI files
 - **Escape everything.** Any user-controlled string on its way to `innerHTML` goes through `escapeHtml` first — and imported bank files are user-controlled strings from outside the app
 - **Never link to a real financial account**, and never add a paid tier. Both are permanent — see [Persistence and privacy](#persistence-and-privacy)

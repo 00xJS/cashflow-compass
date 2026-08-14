@@ -2451,3 +2451,16 @@ window.addEventListener('storage', e => {
 });
 
 initDurableStorage();
+
+// Offline shell. A service worker needs a secure context, so this does nothing
+// when the app is opened straight off the disk over file:// — that path still
+// works, it just has no offline cache to fall back on. Registration is
+// deliberately deferred to load so it never competes with the first render.
+if ('serviceWorker' in navigator && window.isSecureContext) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {
+            // An unregistered worker costs the user nothing but the offline
+            // cache, so a failure here is not worth interrupting them over.
+        });
+    });
+}
