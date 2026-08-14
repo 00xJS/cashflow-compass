@@ -604,6 +604,28 @@ th.sortable .ind span[style*="opacity"] { opacity: 0.9 !important; }
     color: var(--muted);
 }
 
+/* ── Panel sections ── */
+/* Each panel below is filled in by script. While a mount is still empty the whole
+   card leaves the flow, so no heading ever sits above a blank space. */
+.panel-mount:empty { display: none; }
+section.card:has(> .panel-body > .panel-mount:empty) { display: none; }
+
+.panel-note {
+    margin: -4px 0 14px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--muted);
+    max-width: 74ch;
+}
+
+/* Wide panel content scrolls inside its own box; the page itself never moves sideways. */
+.panel-mount { min-width: 0; }
+.panel-mount > * { max-width: 100%; }
+.panel-mount canvas { max-width: 100%; }
+.panel-mount > table { display: block; overflow-x: auto; }
+
+#panelImportMount:empty { display: none; }
+
 /* ── Footer ── */
 footer.app-foot {
     text-align: center;
@@ -693,6 +715,20 @@ footer.app-foot a:hover { color: var(--accent-deep); text-decoration: underline;
         min-height: 44px;
         padding: 8px 10px;
     }
+
+    /* A long meta pill cannot shrink, so it used to drag the whole page sideways. */
+    section.card > h2 { align-items: flex-start; gap: 8px; }
+    section.card > h2 > span:first-child { min-width: 0; }
+    .section-meta {
+        white-space: normal;
+        margin-left: 0;
+        margin-top: 4px;
+    }
+
+    /* Last line of defence: whatever a panel renders, it scrolls in its own box. */
+    .panel-mount { overflow-x: auto; }
+    .panel-mount .insights-grid { grid-template-columns: 1fr; }
+    .panel-note { font-size: 12px; }
 }
 
 /* Touch pointers need 44px targets at any viewport width. */
@@ -738,7 +774,18 @@ footer.app-foot a:hover { color: var(--accent-deep); text-decoration: underline;
     form,
     button,
     .row-actions,
-    #section-charts { display: none !important; }
+    #section-charts,
+    /* Both are places to press things rather than things to read on paper. */
+    #section-scenarios,
+    #section-portability { display: none !important; }
+
+    /* Dark canvases print as ink-heavy blocks; the tables beside them carry the numbers. */
+    .panel-mount canvas { display: none !important; }
+    .panel-mount {
+        overflow: visible !important;
+        max-height: none;
+    }
+    .panel-note { color: #333333; }
 
     header.app-head { border-bottom: 1px solid #b4b4b4; }
     section.card {
@@ -844,6 +891,8 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
         </select>
         <button id="exportXlsxBtn" class="primary">⬇ Excel</button>
         <button id="importXlsxBtn">⬆ Excel</button>
+        <!-- Mount for the bank-file import control. -->
+        <span id="panelImportMount"></span>
         <button id="exportJsonBtn" class="ghost" title="Export JSON">{ JSON }</button>
         <button id="importJsonBtn" class="ghost" title="Import JSON">⇪ JSON</button>
         <button id="loadSampleBtn" type="button" class="ghost load-sample">Load sample data</button>
@@ -1121,6 +1170,30 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
     </div>
 </section>
 
+<!-- Balances by account -->
+<section class="card" id="section-balances">
+    <h2>
+        <span>Balances by Account</span>
+        <button class="ghost icon" type="button" id="balancesToggle" aria-label="Toggle balances by account section" aria-expanded="true" aria-controls="balancesBody"><span class="visually-hidden">Toggle balances by account section</span>▾</button>
+    </h2>
+    <div class="panel-body" id="balancesBody">
+        <p class="panel-note">Where your money actually sits — the projected end-of-month balance for each account, instead of one combined total.</p>
+        <div class="panel-mount" id="panelAccounts"></div>
+    </div>
+</section>
+
+<!-- Bills calendar -->
+<section class="card" id="section-calendar">
+    <h2>
+        <span>Bills Calendar</span>
+        <button class="ghost icon" type="button" id="calendarToggle" aria-label="Toggle bills calendar section" aria-expanded="true" aria-controls="calendarBody"><span class="visually-hidden">Toggle bills calendar section</span>▾</button>
+    </h2>
+    <div class="panel-body" id="calendarBody">
+        <p class="panel-note">A day-by-day view of what lands when, so you can spot the crowded weeks before they arrive.</p>
+        <div class="panel-mount" id="panelCalendar"></div>
+    </div>
+</section>
+
 <!-- Charts -->
 <section class="card" id="section-charts">
     <h2>
@@ -1185,6 +1258,78 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
     <div class="insights-grid" id="insightsGrid"></div>
 </section>
 
+<!-- Monthly check-in -->
+<section class="card" id="section-checkin">
+    <h2>
+        <span>Monthly Check-in</span>
+        <button class="ghost icon" type="button" id="checkinToggle" aria-label="Toggle monthly check-in section" aria-expanded="true" aria-controls="checkinBody"><span class="visually-hidden">Toggle monthly check-in section</span>▾</button>
+    </h2>
+    <div class="panel-body" id="checkinBody">
+        <p class="panel-note">Record what an account really held at the end of a month, so the forecast keeps starting from a true balance.</p>
+        <div class="panel-mount" id="panelCheckin"></div>
+    </div>
+</section>
+
+<!-- Plan vs actual -->
+<section class="card" id="section-variance">
+    <h2>
+        <span>Plan vs Actual</span>
+        <button class="ghost icon" type="button" id="varianceToggle" aria-label="Toggle plan versus actual section" aria-expanded="true" aria-controls="varianceBody"><span class="visually-hidden">Toggle plan versus actual section</span>▾</button>
+    </h2>
+    <div class="panel-body" id="varianceBody">
+        <p class="panel-note">Sets what you planned to spend against what you checked in, so you can see where the forecast drifts.</p>
+        <div class="panel-mount" id="panelVariance"></div>
+    </div>
+</section>
+
+<!-- Debt payoff -->
+<section class="card" id="section-debt">
+    <h2>
+        <span>Debt Payoff</span>
+        <button class="ghost icon" type="button" id="debtToggle" aria-label="Toggle debt payoff section" aria-expanded="true" aria-controls="debtBody"><span class="visually-hidden">Toggle debt payoff section</span>▾</button>
+    </h2>
+    <div class="panel-body" id="debtBody">
+        <p class="panel-note">How long each balance takes to clear at the payment you are making now, and what the interest costs along the way.</p>
+        <div class="panel-mount" id="panelDebt"></div>
+    </div>
+</section>
+
+<!-- Savings goals -->
+<section class="card" id="section-goals">
+    <h2>
+        <span>Savings Goals</span>
+        <button class="ghost icon" type="button" id="goalsToggle" aria-label="Toggle savings goals section" aria-expanded="true" aria-controls="goalsBody"><span class="visually-hidden">Toggle savings goals section</span>▾</button>
+    </h2>
+    <div class="panel-body" id="goalsBody">
+        <p class="panel-note">Set an amount you are saving towards and see the date you reach it at your current pace.</p>
+        <div class="panel-mount" id="panelGoals"></div>
+    </div>
+</section>
+
+<!-- Scenarios -->
+<section class="card" id="section-scenarios">
+    <h2>
+        <span>Scenarios</span>
+        <button class="ghost icon" type="button" id="scenariosToggle" aria-label="Toggle scenarios section" aria-expanded="true" aria-controls="scenariosBody"><span class="visually-hidden">Toggle scenarios section</span>▾</button>
+    </h2>
+    <div class="panel-body" id="scenariosBody">
+        <p class="panel-note">Try a what-if — a raise, a rent rise, one bill gone — and compare it against your real numbers without changing them.</p>
+        <div class="panel-mount" id="panelScenarios"></div>
+    </div>
+</section>
+
+<!-- Backup and portability -->
+<section class="card" id="section-portability">
+    <h2>
+        <span>Backup &amp; Portability</span>
+        <button class="ghost icon" type="button" id="portabilityToggle" aria-label="Toggle backup and portability section" aria-expanded="true" aria-controls="portabilityBody"><span class="visually-hidden">Toggle backup and portability section</span>▾</button>
+    </h2>
+    <div class="panel-body" id="portabilityBody">
+        <p class="panel-note">Save a full copy of your data, bring one back, or carry it to another browser or device. Nothing leaves your machine.</p>
+        <div class="panel-mount" id="panelPortability"></div>
+    </div>
+</section>
+
 </main>
 
 <footer class="app-foot">
@@ -1202,5 +1347,8 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 
 <script src="engine.js"></script>
 <script src="app.js"></script>
+<script src="importers.js"></script>
+<script src="features.js"></script>
+<script src="portability.js"></script>
 </body>
 </html>

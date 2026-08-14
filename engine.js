@@ -10,7 +10,7 @@
  *  charts, insights, Excel/JSON round-trip.
  * ========================================================= */
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 const STORAGE_KEY = 'projectBudgetingState';
 
 // Declared here rather than in app.js so engine.js is self-contained: the pure
@@ -97,6 +97,13 @@ const DEFAULT_CATEGORIES = [
     { id: 'cat_goal',       name: 'Savings Goal',     kind: 'goal',          color: '#7dd3fc' }
 ];
 
+// Schema version each default category first shipped in. Anything absent here
+// dates from v1. migrate() uses this so an upgrade adds only genuinely new
+// categories and leaves deleted ones deleted.
+const CATEGORY_INTRODUCED_IN = {
+    cat_goal: 5
+};
+
 const FREQUENCY_LABELS = {
     'one-time':     'One-time',
     'weekly':       'Weekly',
@@ -138,11 +145,19 @@ function defaultState() {
             currency: 'USD',
             forecastHorizon: '12',
             chartHorizons: {},
-            lastExportAt: null
+            lastExportAt: null,
+            activeScenarioId: null,
+            importMappings: {}
         },
         accounts: [],
         categories: structuredClone(DEFAULT_CATEGORIES),
-        transactions: []
+        transactions: [],
+        // Recorded history, kept apart from the plan: `actuals` is what happened,
+        // `checkins` is what the bank said a balance was, `scenarios` are edits
+        // layered over the plan without ever being written into it.
+        actuals: [],
+        checkins: [],
+        scenarios: []
     };
 }
 
@@ -159,12 +174,16 @@ function migrate(s) {
     if (!s.settings) s.settings = defaultState().settings;
     if (!s.accounts) s.accounts = [];
     if (!s.categories || s.categories.length === 0) s.categories = structuredClone(DEFAULT_CATEGORIES);
-    // Backfill defaults introduced since the version this state was written at —
-    // but only on an upgrade. Doing it every load would resurrect any default the
-    // user has deliberately deleted.
+    // Backfill only the defaults that did not exist yet at the version this state
+    // was written at. Adding every missing default on an upgrade would resurrect
+    // one the user deliberately deleted; CATEGORY_INTRODUCED_IN is what separates
+    // "new in this release" from "you threw this away on purpose".
     if (fromVersion < SCHEMA_VERSION) {
         DEFAULT_CATEGORIES.forEach(def => {
-            if (!s.categories.find(c => c.id === def.id)) s.categories.push({ ...def });
+            const since = CATEGORY_INTRODUCED_IN[def.id] || 1;
+            if (since > fromVersion && !s.categories.find(c => c.id === def.id)) {
+                s.categories.push({ ...def });
+            }
         });
     }
     // v1 → v2: refresh default category colors for the broader palette, but
@@ -211,6 +230,30 @@ function migrate(s) {
         if (t.escalation == null) t.escalation = 0;
         if (t.paused == null) t.paused = false;
     });
+    // v5 → v6: recorded history alongside the plan. Anything not an array is
+    // replaced rather than trusted — a malformed value here would otherwise throw
+    // deep inside a render.
+    if (!Array.isArray(s.actuals))   s.actuals = [];
+    if (!Array.isArray(s.checkins))  s.checkins = [];
+    if (!Array.isArray(s.scenarios)) s.scenarios = [];
+    s.actuals.forEach(a => {
+        if (a.accountId    === undefined) a.accountId = null;
+        if (a.categoryId   === undefined) a.categoryId = null;
+        if (a.matchedTxId  === undefined) a.matchedTxId = null;
+        if (!a.source) a.source = 'manual';
+    });
+    s.scenarios.forEach(sc => { if (!Array.isArray(sc.ops)) sc.ops = []; });
+    if (s.settings.activeScenarioId === undefined) s.settings.activeScenarioId = null;
+    if (!s.settings.importMappings || typeof s.settings.importMappings !== 'object' ||
+        Array.isArray(s.settings.importMappings)) {
+        s.settings.importMappings = {};
+    }
+    // A pointer at a scenario that is no longer there would silently forecast the
+    // base plan while the UI claimed a scenario was live.
+    if (s.settings.activeScenarioId &&
+        !s.scenarios.some(sc => sc.id === s.settings.activeScenarioId)) {
+        s.settings.activeScenarioId = null;
+    }
     s.schemaVersion = SCHEMA_VERSION;
     return s;
 }
@@ -223,9 +266,18 @@ function uid(prefix) {
 
 function parseDate(s) {
     if (!s) return null;
-    if (s instanceof Date) return new Date(s.getFullYear(), s.getMonth(), s.getDate());
-    const [y, m, d] = s.split('-').map(Number);
-    return new Date(y, m - 1, d);
+    if (s instanceof Date) {
+        return isNaN(s.getTime()) ? null : new Date(s.getFullYear(), s.getMonth(), s.getDate());
+    }
+    const parts = String(s).trim().split('-');
+    if (parts.length !== 3) return null;
+    const [y, m, d] = parts.map(Number);
+    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+    const dt = new Date(y, m - 1, d);
+    // A typo like 2026-13-99 must not silently become a real date in 2027 —
+    // JS Date rolls overflow forward, so reject anything that shifted.
+    if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
+    return dt;
 }
 function fmtDate(d) {
     if (!d) return '';
@@ -442,7 +494,30 @@ function walkDailyBalance(startBalance, dayMap, horizonStart, horizonEnd, countR
 
 /* ───── Forecast engine ───── */
 
-function buildForecast(months) {
+// buildForecast(months) is unchanged for every existing caller. Pass
+// { scenarioId } to forecast a what-if instead: the scenario is applied to a
+// throwaway copy of the state, the forecast is built against that, and the real
+// state is put back — so a scenario can never leak into the saved plan, even if
+// the build throws.
+function buildForecast(months, opts) {
+    const scenarioId = (opts && opts.scenarioId) || null;
+    let forecast;
+    if (scenarioId) {
+        const base = state;
+        try {
+            state = applyScenario(base, scenarioId);
+            forecast = buildForecastFromState(months);
+        } finally {
+            state = base;
+        }
+    } else {
+        forecast = buildForecastFromState(months);
+    }
+    forecast.scenarioId = scenarioId;
+    return forecast;
+}
+
+function buildForecastFromState(months) {
     months = clampMonths(months);
     const today = startOfDay(new Date());
     const horizonStart = startOfMonth(today);
@@ -546,7 +621,13 @@ function buildForecast(months) {
             credit,
             apr: Math.max(0, parseFloat(a.apr) || 0),
             minPayment: Math.max(0, parseFloat(a.minPayment) || 0),
+            // `start` is the balance at the top of the month grid — the pass below
+            // folds anything falling between the snapshot and then into it.
+            // `startRaw` stays the snapshot itself, so a balance can be projected
+            // for any date from the snapshot onwards (see checkinDrift).
+            startRaw: credit ? Math.abs(raw) : raw,
             start: credit ? Math.abs(raw) : raw,
+            dayNet: [],
             monthly: new Array(months).fill(0),
             running: new Array(months).fill(0),
             daysInRed: 0,
@@ -558,7 +639,8 @@ function buildForecast(months) {
     const unassigned = {
         id: UNASSIGNED_ACCOUNT, name: 'Unassigned', type: 'cash',
         liquid: true, credit: false, apr: 0, minPayment: 0,
-        start: 0, monthly: new Array(months).fill(0), running: new Array(months).fill(0),
+        startRaw: 0, start: 0, dayNet: [],
+        monthly: new Array(months).fill(0), running: new Array(months).fill(0),
         daysInRed: 0, lowest: { date: new Date(horizonStart), balance: 0 }
     };
     const walkTargets = accountsList.concat([unassigned]);
@@ -570,6 +652,24 @@ function buildForecast(months) {
         if (!t) return;
         if (m.idx < 0) t.start += m.delta;
         else t.monthly[m.idx] += m.delta;
+    });
+
+    // Every movement from the snapshot onwards, day by day — including the ones
+    // that land before the grid opens and are otherwise only visible folded into
+    // `start`. Sorted by date key so a projection to an arbitrary date is a walk.
+    const fullDayNets = {};
+    movements.forEach(m => {
+        if (!targetById[m.target]) return;
+        const key = fmtDate(m.date);
+        let map = fullDayNets[m.target];
+        if (!map) { map = new Map(); fullDayNets[m.target] = map; }
+        map.set(key, (map.get(key) || 0) + m.delta);
+    });
+    walkTargets.forEach(t => {
+        const map = fullDayNets[t.id];
+        t.dayNet = map
+            ? Array.from(map.keys()).sort().map(key => ({ key, delta: map.get(key) }))
+            : [];
     });
 
     walkTargets.forEach(t => {
@@ -674,6 +774,56 @@ function buildForecast(months) {
         orphans, mismatches,
         horizonStart, horizonEnd, cutoffDate: cutoff, months
     };
+}
+
+/* ───── Scenarios ─────
+ * A scenario is a list of edits held beside the plan, never inside it. Applying
+ * one produces a throwaway copy of the state; the saved plan is untouched, so a
+ * what-if can always be abandoned by simply not looking at it again.
+ */
+
+// The only fields a scenario may rewrite. Anything else in a patch is ignored —
+// a scenario must not be able to move a transaction between accounts or
+// categories behind the user's back, and an unbounded patch would let a
+// malformed import overwrite ids.
+const SCENARIO_PATCH_FIELDS = ['amount', 'startDate', 'endDate', 'paused', 'escalation'];
+
+function applyScenario(baseState, scenarioId) {
+    if (!baseState || typeof baseState !== 'object') return baseState;
+    const clone = structuredClone(baseState);
+    if (!Array.isArray(clone.transactions)) clone.transactions = [];
+    if (!scenarioId) return clone;
+    const scenarios = Array.isArray(clone.scenarios) ? clone.scenarios : [];
+    const scenario = scenarios.find(s => s && s.id === scenarioId);
+    // An unknown id is the base plan, not an error: the active scenario may have
+    // been deleted in another tab between the click and the render.
+    if (!scenario || !Array.isArray(scenario.ops)) return clone;
+
+    scenario.ops.forEach(op => {
+        if (!op) return;
+        if (op.op === 'add') {
+            if (!op.tx || typeof op.tx !== 'object') return;
+            // Cloned again so the scenario's own copy of the transaction stays
+            // separate from the one now sitting in the plan.
+            const tx = structuredClone(op.tx);
+            if (!tx.id) tx.id = uid('tx');
+            if (tx.tags == null) tx.tags = [];
+            if (tx.escalation == null) tx.escalation = 0;
+            if (tx.paused == null) tx.paused = false;
+            clone.transactions.push(tx);
+        } else if (op.op === 'remove') {
+            if (!op.txId) return;
+            clone.transactions = clone.transactions.filter(t => t.id !== op.txId);
+        } else if (op.op === 'modify') {
+            if (!op.txId || !op.patch || typeof op.patch !== 'object') return;
+            const tx = clone.transactions.find(t => t.id === op.txId);
+            if (!tx) return;
+            SCENARIO_PATCH_FIELDS.forEach(field => {
+                if (op.patch[field] !== undefined) tx[field] = op.patch[field];
+            });
+        }
+    });
+    return clone;
 }
 
 /* ───── Debt payoff ─────
@@ -804,6 +954,439 @@ function goalProgress(forecast) {
             onTrack: (target > 0 && targetDate) ? !!(eta && eta <= targetDate) : null
         };
     });
+}
+
+/* ───── Recorded history ─────
+ * Everything from here to the currency helpers reads what actually happened —
+ * imported actuals and balance check-ins — and holds it against the plan. All of
+ * it is pure: no DOM, no writes to state, every denominator guarded. A NaN loose
+ * in here would travel straight into a chart axis and blank the card around it.
+ */
+
+// A category that has been deleted still has spending recorded against it, so it
+// is named rather than dropped — otherwise the totals stop reconciling.
+function categoryNameOf(id) {
+    const cats = (state && Array.isArray(state.categories)) ? state.categories : [];
+    const c = cats.find(x => x && x.id === id);
+    return c ? c.name : 'Uncategorised';
+}
+
+// Actual amounts are signed (negative = money out). An inflow is a refund or a
+// paycheck, not spending, so it takes no part in any spend comparison below.
+// Returns catId -> Map(monthKey -> outflow total), plus every month key seen.
+function actualOutflowsByCategoryMonth(actuals) {
+    const byCategory = new Map();
+    const monthKeys = new Set();
+    (Array.isArray(actuals) ? actuals : []).forEach(a => {
+        const amt = parseFloat(a && a.amount);
+        if (!Number.isFinite(amt) || amt >= 0) return;
+        const d = parseDate(a.date);
+        if (!d) return;
+        const key = ymKey(d);
+        const catId = a.categoryId || UNCATEGORISED;
+        let byMonth = byCategory.get(catId);
+        if (!byMonth) { byMonth = new Map(); byCategory.set(catId, byMonth); }
+        byMonth.set(key, (byMonth.get(key) || 0) + Math.abs(amt));
+        monthKeys.add(key);
+    });
+    return { byCategory, monthKeys };
+}
+
+/* ───── Plan vs actual ───── */
+
+// How far the average month may drift from the plan before the category is worth
+// re-stating.
+const VARIANCE_THRESHOLD_PCT = 15;
+
+function computeVariance(forecast, actuals) {
+    const empty = {
+        byCategory: [], byMonth: [],
+        totals: { planned: 0, actual: 0, delta: 0 },
+        suggestions: []
+    };
+    if (!forecast || !Array.isArray(forecast.monthList)) return empty;
+    const months = forecast.monthList.length;
+    const plan = forecast.monthlyByCategory || {};
+    const { byCategory: actualByCat, monthKeys } = actualOutflowsByCategoryMonth(actuals);
+
+    // Whole months only. A month still running is excluded outright: half a month
+    // of spending against a whole month of plan reads as an underspend that has
+    // not happened yet.
+    const currentKey = ymKey(startOfDay(new Date()));
+    const windowKeys = Array.from(monthKeys).filter(k => k < currentKey).sort();
+    if (!windowKeys.length) return empty;
+
+    // The forecast grid opens on the first of the current month, so every elapsed
+    // month sits before it and has no column of its own. The plan is recurring,
+    // so its average month across the horizon is what it claims a month costs —
+    // that is the figure an elapsed month is held against.
+    const plannedMonthly = {};
+    Object.keys(plan).forEach(id => {
+        const series = Array.isArray(plan[id]) ? plan[id] : [];
+        const sum = series.reduce((s, n) => s + (Number.isFinite(n) ? n : 0), 0);
+        plannedMonthly[id] = months > 0 ? sum / months : 0;
+    });
+
+    const ids = new Set(Object.keys(plannedMonthly));
+    actualByCat.forEach((_perMonth, id) => ids.add(id));
+
+    const byCategory = [];
+    ids.forEach(id => {
+        const perMonth = actualByCat.get(id);
+        const planned = (plannedMonthly[id] || 0) * windowKeys.length;
+        let actual = 0, monthsWithData = 0;
+        windowKeys.forEach(k => {
+            const v = perMonth ? (perMonth.get(k) || 0) : 0;
+            actual += v;
+            if (v > 0) monthsWithData++;
+        });
+        // Never planned and never spent — there is nothing to say about it.
+        if (planned <= 0 && actual <= 0) return;
+        const delta = actual - planned;
+        byCategory.push({
+            categoryId: id,
+            name: categoryNameOf(id),
+            planned, actual, delta,
+            // A category the plan never budgeted for has no percentage to give:
+            // null, rather than an infinity dressed up as a number.
+            pct: planned > 0 ? (delta / planned) * 100 : null,
+            // Months inside the window in which this category was actually spent
+            // on — the evidence behind the row, not the width of the window.
+            months: monthsWithData
+        });
+    });
+    byCategory.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+
+    const byMonth = windowKeys.map(key => {
+        let planned = 0, actual = 0;
+        byCategory.forEach(row => {
+            planned += plannedMonthly[row.categoryId] || 0;
+            const perMonth = actualByCat.get(row.categoryId);
+            actual += perMonth ? (perMonth.get(key) || 0) : 0;
+        });
+        return { key, label: ymLabel(parseDate(key + '-01')), planned, actual, delta: actual - planned };
+    });
+
+    const totals = byCategory.reduce((t, r) => ({
+        planned: t.planned + r.planned,
+        actual:  t.actual  + r.actual,
+        delta:   t.delta   + r.delta
+    }), { planned: 0, actual: 0, delta: 0 });
+
+    // One month of evidence is an anecdote, so two is the floor. Both averages
+    // run over the same window, which keeps them comparable even for a category
+    // that only turns up in some of its months.
+    const suggestions = byCategory.filter(r => {
+        if (r.months < 2) return false;
+        const pm = r.planned / windowKeys.length;
+        const am = r.actual / windowKeys.length;
+        if (pm <= 0) return am > 0;
+        return (Math.abs(am - pm) / pm) * 100 > VARIANCE_THRESHOLD_PCT;
+    }).map(r => ({
+        categoryId: r.categoryId,
+        name: r.name,
+        plannedMonthly: r.planned / windowKeys.length,
+        actualMonthly: r.actual / windowKeys.length,
+        months: r.months,
+        confidence: r.months >= 6 ? 'high' : r.months >= 3 ? 'medium' : 'low'
+    }));
+
+    return { byCategory, byMonth, totals, suggestions };
+}
+
+/* ───── Balance check-ins ───── */
+
+// Projects one account from its own snapshot to `when`. Credit interest is left
+// out deliberately: the forecast applies it monthly, while a drift check spans
+// days or weeks, where the accrual is smaller than the noise it would add.
+function projectedAccountBalance(entry, when) {
+    if (!entry) return 0;
+    let bal = Number.isFinite(entry.startRaw) ? entry.startRaw : (entry.start || 0);
+    const key = fmtDate(startOfDay(when));
+    (entry.dayNet || []).forEach(step => { if (step.key <= key) bal += step.delta; });
+    return bal;
+}
+
+function checkinDrift(forecast, checkins) {
+    if (!forecast || !Array.isArray(checkins) || !checkins.length) return null;
+    const targets = {};
+    (forecast.accountsList || []).forEach(t => { targets[t.id] = t; });
+    if (forecast.unassigned) targets[forecast.unassigned.id] = forecast.unassigned;
+
+    // The newest reading per account, and only that one. Older readings are
+    // history, and averaging them would blunt the very signal being looked for.
+    const latestPer = new Map();
+    checkins.forEach(c => {
+        if (!c || !c.accountId) return;
+        const d = parseDate(c.date);
+        const bal = parseFloat(c.balance);
+        if (!d || !Number.isFinite(bal)) return;
+        const prev = latestPer.get(c.accountId);
+        if (!prev || d > prev.date) latestPer.set(c.accountId, { id: c.id, date: d, balance: bal });
+    });
+
+    const byAccount = [];
+    let expectedTotal = 0, actualTotal = 0, latest = null;
+    latestPer.forEach((c, accountId) => {
+        const t = targets[accountId];
+        if (!t) return;
+        const expected = projectedAccountBalance(t, c.date);
+        const drift = c.balance - expected;
+        const denom = Math.abs(expected);
+        byAccount.push({
+            accountId, name: t.name, credit: !!t.credit,
+            checkinId: c.id, date: c.date,
+            expected, actual: c.balance, drift,
+            driftPct: denom > 0 ? (drift / denom) * 100 : null
+        });
+        // Totals read in net-worth terms, so a card balance — an amount owed —
+        // counts against the pile instead of adding to it. A card and a current
+        // account would otherwise cancel each other out to a meaningless zero.
+        const sign = t.credit ? -1 : 1;
+        expectedTotal += sign * expected;
+        actualTotal   += sign * c.balance;
+        if (!latest || c.date > latest) latest = c.date;
+    });
+    if (!byAccount.length) return null;
+    byAccount.sort((a, b) =>
+        String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }));
+
+    const drift = actualTotal - expectedTotal;
+    const denom = Math.abs(expectedTotal);
+    return {
+        latest,
+        expected: expectedTotal,
+        actual: actualTotal,
+        drift,
+        driftPct: denom > 0 ? (drift / denom) * 100 : null,
+        byAccount
+    };
+}
+
+/* ───── Volatility and confidence bands ───── */
+
+// Below this many observed months a category's spread is noise, not a range.
+const VOLATILITY_MIN_MONTHS = 3;
+
+// Linear interpolation between order statistics — the convention a spreadsheet's
+// PERCENTILE uses, so a figure quoted here matches one worked out by hand.
+function percentileOf(sorted, p) {
+    const n = sorted.length;
+    if (!n) return 0;
+    if (n === 1) return sorted[0];
+    const idx = (n - 1) * Math.min(1, Math.max(0, p));
+    const lo = Math.floor(idx), hi = Math.ceil(idx);
+    if (lo === hi) return sorted[lo];
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+function categoryVolatility(actuals) {
+    const { byCategory } = actualOutflowsByCategoryMonth(actuals);
+    // A month still running holds only part of its spending; counting it would
+    // drag every percentile down towards a total that has not finished happening.
+    const currentKey = ymKey(startOfDay(new Date()));
+    const out = {};
+    byCategory.forEach((byMonth, catId) => {
+        const totals = [];
+        byMonth.forEach((v, key) => { if (key < currentKey && Number.isFinite(v)) totals.push(v); });
+        totals.sort((a, b) => a - b);
+        // n comes back even when it is too small to act on — a caller has to be
+        // able to see that the history is thin rather than infer it from silence.
+        out[catId] = {
+            p25: percentileOf(totals, 0.25),
+            p50: percentileOf(totals, 0.50),
+            p75: percentileOf(totals, 0.75),
+            n: totals.length
+        };
+    });
+    return out;
+}
+
+// Three running-balance series, each swapping a category's observed monthly
+// figure in for its planned one. Only categories with enough observed months
+// take part; everything else stays on the plan.
+//
+// Returns null when no category qualifies. That is the whole point of the
+// function: a band drawn around a plan that has never been checked against
+// reality would be pure invention, and would look exactly as authoritative as
+// one built from a year of history.
+function confidenceBands(forecast, volatility) {
+    if (!forecast || !Array.isArray(forecast.runningBalance) || !volatility) return null;
+    const months = forecast.runningBalance.length;
+    if (!months) return null;
+    const plan = forecast.monthlyByCategory || {};
+
+    const eligible = Object.keys(volatility).filter(id => {
+        const v = volatility[id];
+        return v && Number.isFinite(v.n) && v.n >= VOLATILITY_MIN_MONTHS &&
+            Number.isFinite(v.p25) && Number.isFinite(v.p50) && Number.isFinite(v.p75);
+    });
+    if (!eligible.length) return null;
+
+    const bands = {};
+    ['p25', 'p50', 'p75'].forEach(key => {
+        const series = new Array(months).fill(0);
+        let cumulative = 0;
+        for (let i = 0; i < months; i++) {
+            let adjust = 0;
+            eligible.forEach(id => {
+                const planned = (Array.isArray(plan[id]) && Number.isFinite(plan[id][i])) ? plan[id][i] : 0;
+                const observed = Math.max(0, volatility[id][key]);
+                // Both are outflows, so spending less than planned leaves more in
+                // the account: the p25 line runs highest, the p75 line lowest.
+                adjust += planned - observed;
+            });
+            cumulative += adjust;
+            const base = Number.isFinite(forecast.runningBalance[i]) ? forecast.runningBalance[i] : 0;
+            series[i] = base + cumulative;
+        }
+        bands[key] = series;
+    });
+    return bands;
+}
+
+/* ───── Bills calendar ───── */
+
+// Per-day net movement with the names behind it, read straight off the
+// per-occurrence buckets the forecast already built. Only days with something on
+// them are returned. Transfers are left out: they shuffle money between the
+// user's own accounts and would show as a bill that no one is billing for.
+function billsCalendar(forecast, fromDate, months) {
+    if (!forecast || !Array.isArray(forecast.txData)) return [];
+    const from = startOfDay(parseDate(fromDate) || forecast.horizonStart || new Date());
+    const span = clampMonths(months == null ? 1 : months);
+    const to = endOfMonth(addMonths(startOfMonth(from), span - 1));
+
+    const byDate = new Map();
+    forecast.txData.forEach(entry => {
+        const tx = entry && entry.tx;
+        if (!tx) return;
+        const name = tx.name || '(unnamed)';
+        (entry.byDay || []).forEach(occ => {
+            if (!occ || !occ.signed || !Number.isFinite(occ.signed)) return;
+            const d = startOfDay(occ.date);
+            if (d < from || d > to) return;
+            const key = fmtDate(d);
+            let day = byDate.get(key);
+            if (!day) { day = { key, date: d, net: 0, items: [] }; byDate.set(key, day); }
+            day.net += occ.signed;
+            day.items.push({
+                name,
+                amount: occ.signed,
+                txId: tx.id,
+                categoryId: tx.categoryId || null,
+                kind: effectiveKind(tx)
+            });
+        });
+    });
+
+    const days = Array.from(byDate.keys()).sort().map(k => byDate.get(k));
+    // Biggest mover first within a day — on a crowded day the rent matters more
+    // than the coffee subscription.
+    days.forEach(day => day.items.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)));
+    return days;
+}
+
+/* ───── Matching actuals to the plan ───── */
+
+const MATCH_WINDOW_DAYS = 7;
+// "Within a cent" — the tolerance, plus a crumb for binary floating point.
+const MATCH_AMOUNT_TOLERANCE = 0.01 + 1e-9;
+
+function matchActuals(actuals, forecast, windowDays) {
+    if (!forecast || !Array.isArray(forecast.txData)) return [];
+    const parsed = parseFloat(windowDays);
+    const win = Math.max(0, Math.round(Number.isFinite(parsed) ? parsed : MATCH_WINDOW_DAYS));
+
+    const rows = [];
+    let lo = null, hi = null;
+    (Array.isArray(actuals) ? actuals : []).forEach(a => {
+        if (!a || !a.id) return;
+        const amt = parseFloat(a.amount);
+        const d = parseDate(a.date);
+        if (!d || !Number.isFinite(amt) || amt === 0) return;
+        rows.push({ id: a.id, date: d, amount: amt });
+        if (!lo || d < lo) lo = d;
+        if (!hi || d > hi) hi = d;
+    });
+    if (!rows.length) return [];
+
+    // The forecast's own occurrences start at the account snapshot, but actuals
+    // are history and mostly fall before it, so the window they occupy is walked
+    // as well. Occurrences are keyed by transaction and date, which also folds
+    // away the overlap between the two sources.
+    const from = addDays(lo, -win), to = addDays(hi, win);
+    const buckets = new Map();   // rounded pence/cents -> [occurrence]
+    forecast.txData.forEach(entry => {
+        const tx = entry && entry.tx;
+        if (!tx) return;
+        const kind = effectiveKind(tx);
+        if (kind === 'transfer') return;   // no direction, so nothing to match against
+        const seen = new Set();
+        (entry.occs || []).concat(occurrences(tx, from, to)).forEach(raw => {
+            const d = startOfDay(raw);
+            const key = fmtDate(d);
+            if (seen.has(key)) return;
+            seen.add(key);
+            const amt = amountAtDate(tx, d);
+            if (!Number.isFinite(amt) || amt === 0) return;
+            const cents = Math.round(amt * 100);
+            const occ = {
+                occKey: tx.id + '|' + key,
+                txId: tx.id, date: d, cents,
+                signed: kind === 'expense' ? -amt : amt
+            };
+            let bucket = buckets.get(cents);
+            if (!bucket) { bucket = []; buckets.set(cents, bucket); }
+            bucket.push(occ);
+        });
+    });
+    if (!buckets.size) return [];
+
+    // Candidate pairs, then a single greedy pass. Bucketing by whole cents keeps
+    // this linear-ish: a match has to be within a cent, so only the neighbouring
+    // buckets can hold one.
+    const pairs = [];
+    rows.forEach(a => {
+        const magnitude = Math.abs(a.amount);
+        const centre = Math.round(magnitude * 100);
+        [centre - 1, centre, centre + 1].forEach(c => {
+            const bucket = buckets.get(c);
+            if (!bucket) return;
+            bucket.forEach(occ => {
+                if ((a.amount < 0) !== (occ.signed < 0)) return;
+                const diff = Math.abs(magnitude - Math.abs(occ.signed));
+                if (diff > MATCH_AMOUNT_TOLERANCE) return;
+                const dateDelta = daysBetween(occ.date, a.date);
+                if (Math.abs(dateDelta) > win) return;
+                pairs.push({
+                    actualId: a.id, txId: occ.txId, occKey: occ.occKey,
+                    dateDelta, diff,
+                    exact: dateDelta === 0 && centre === occ.cents
+                });
+            });
+        });
+    });
+
+    // Closest in time wins, then closest in amount. The id comparison is only
+    // there to keep the order the same from one run to the next.
+    pairs.sort((x, y) =>
+        Math.abs(x.dateDelta) - Math.abs(y.dateDelta) ||
+        x.diff - y.diff ||
+        String(x.actualId).localeCompare(String(y.actualId)) ||
+        String(x.occKey).localeCompare(String(y.occKey)));
+
+    const claimedActual = new Set(), claimedOcc = new Set();
+    const out = [];
+    pairs.forEach(p => {
+        // One actual settles one occurrence: a monthly bill must not be marked
+        // paid twice because two months of statements were imported at once.
+        if (claimedActual.has(p.actualId) || claimedOcc.has(p.occKey)) return;
+        claimedActual.add(p.actualId);
+        claimedOcc.add(p.occKey);
+        out.push({ actualId: p.actualId, txId: p.txId, dateDelta: p.dateDelta, exact: p.exact });
+    });
+    return out;
 }
 
 /* ───── Currency formatting ───── */

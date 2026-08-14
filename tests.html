@@ -249,7 +249,8 @@ footer a { color: var(--muted); }
 <header>
     <a class="kicker" href="index.html">Observation Deck / Cashflow Compass</a>
     <h1>Engine test suite</h1>
-    <p class="tagline">Pure logic only — <code>engine.js</code> is loaded on its own, with no DOM, no build step and no test library.</p>
+    <p class="tagline">307 assertions. Pure logic only — <code>engine.js</code> and <code>importers.js</code> are
+    loaded on their own, with no DOM, no <code>app.js</code>, no build step and no test library.</p>
 </header>
 
 <!-- Static fallback. The runner replaces this on boot, so if it is still here
@@ -280,6 +281,25 @@ footer a { color: var(--muted); }
 </div>
 
 <script src="engine.js"></script>
+<script>
+/* ───── Script-load watch ─────
+ * Installed before importers.js so a parser file that is missing, or that throws
+ * on load because it expected app.js to be sitting underneath it, is reported as
+ * a named failure in the Importers section instead of vanishing into the console.
+ * A resource that fails to load fires a non-bubbling error on the element, so the
+ * listener has to be in the capture phase to see it at all.
+ */
+const SCRIPT_LOAD = { failed: [], threw: [] };
+window.addEventListener('error', function (e) {
+    const t = e && e.target;
+    if (t && t !== window && t.tagName === 'SCRIPT') {
+        SCRIPT_LOAD.failed.push(String(t.getAttribute('src') || '(inline)'));
+    } else if (e && e.filename) {
+        SCRIPT_LOAD.threw.push(String(e.filename).split('/').pop() + ': ' + String(e.message || 'threw while loading'));
+    }
+}, true);
+</script>
+<script src="importers.js"></script>
 <script>
 /* =========================================================
  *  Cashflow Compass — engine test suite
@@ -414,11 +434,17 @@ function nid(prefix) { return prefix + '_t' + (++SEQ); }
 
 function mkState(over) {
     const s = {
-        schemaVersion: typeof SCHEMA_VERSION === 'number' ? SCHEMA_VERSION : 5,
-        settings: { currency: 'USD', forecastHorizon: '12', chartHorizons: {}, lastExportAt: null },
+        schemaVersion: typeof SCHEMA_VERSION === 'number' ? SCHEMA_VERSION : 6,
+        settings: {
+            currency: 'USD', forecastHorizon: '12', chartHorizons: {}, lastExportAt: null,
+            activeScenarioId: null, importMappings: {}
+        },
         accounts: [],
         categories: typeof DEFAULT_CATEGORIES !== 'undefined' ? structuredClone(DEFAULT_CATEGORIES) : [],
-        transactions: []
+        transactions: [],
+        actuals: [],
+        checkins: [],
+        scenarios: []
     };
     return Object.assign(s, over || {});
 }
@@ -561,6 +587,22 @@ describe('Date helpers',
             assertEqual(isoOf(addDays(D('2026-01-31'), 1)), '2026-02-01');
             assertEqual(isoOf(addDays(D('2026-12-31'), 1)), '2027-01-01');
             assertEqual(isoOf(addDays(D('2026-03-01'), -1)), '2026-02-28');
+        });
+
+        it('parseDate returns null for a string that is not a date, not an Invalid Date', function () {
+            const d = parseDate('not-a-date');
+            assertEqual(d, null,
+                'parseDate("not-a-date") came back as ' + show(d) + '. An Invalid Date is truthy and its ' +
+                'getTime() is NaN, so it walks straight through every `if (!d) return;` guard in the engine ' +
+                'and then loses every comparison it takes part in — which is how a malformed record ends up ' +
+                'outranking a good one. Two tests further down fail on exactly this.');
+        });
+
+        it('parseDate does not roll an impossible date over into a real one', function () {
+            const d = parseDate('2026-13-99');
+            assertEqual(d, null,
+                'month 13, day 99 came back as ' + show(d) + '. A typo in an imported file becomes a ' +
+                'confident, plausible date nobody will ever question.');
         });
     });
 
@@ -1540,11 +1582,11 @@ describe('Currency formatting',
 /* ───── Schema migration ───── */
 
 describe('Schema migration',
-    'migrate() must carry v1..v4 states forward, and must refuse a state written by a newer ' +
+    'migrate() must carry v1..v5 states forward, and must refuse a state written by a newer ' +
     'build rather than quietly mangling it.',
     function () {
-        it('SCHEMA_VERSION is 5', function () {
-            assertEqual(SCHEMA_VERSION, 5);
+        it('SCHEMA_VERSION is 6', function () {
+            assertEqual(SCHEMA_VERSION, 6);
         });
 
         it('defaultState carries the v5 fields', function () {
@@ -1561,7 +1603,7 @@ describe('Schema migration',
                 categories: [{ id: 'cat_housing', name: 'Housing', kind: 'fixed', color: '#2563eb' }],
                 transactions: [{ id: 't1', name: 'Rent', kind: 'expense', amount: 900, frequency: 'monthly', startDate: '2020-01-01', categoryId: 'cat_housing' }]
             });
-            assertEqual(s.schemaVersion, 5);
+            assertEqual(s.schemaVersion, SCHEMA_VERSION);
             assertEqual(s.settings.forecastHorizon, '18', 'the old numeric forecastMonths becomes a horizon token');
             assertEqual(s.settings.forecastMonths, undefined, 'and the old key is dropped');
             assertEqual(s.settings.lastExportAt, null);
@@ -1580,7 +1622,7 @@ describe('Schema migration',
                 categories: structuredClone(DEFAULT_CATEGORIES),
                 transactions: []
             });
-            assertEqual(s.schemaVersion, 5);
+            assertEqual(s.schemaVersion, SCHEMA_VERSION);
             assertEqual(s.settings.forecastHorizon, '24');
             assertEqual(s.accounts[0].apr, 0);
             assertEqual(s.accounts[0].minPayment, 0);
@@ -1594,7 +1636,7 @@ describe('Schema migration',
                 categories: structuredClone(DEFAULT_CATEGORIES),
                 transactions: []
             });
-            assertEqual(s.schemaVersion, 5);
+            assertEqual(s.schemaVersion, SCHEMA_VERSION);
             assertEqual(s.settings.forecastHorizon, 'eoy', 'an existing horizon token is left alone');
             assertEqual(s.settings.chartHorizons.balance, '24', 'per-chart horizons survive');
             assertEqual(s.accounts[0].apr, 0);
@@ -1611,7 +1653,7 @@ describe('Schema migration',
                 categories: structuredClone(DEFAULT_CATEGORIES),
                 transactions: []
             });
-            assertEqual(s.schemaVersion, 5);
+            assertEqual(s.schemaVersion, SCHEMA_VERSION);
             assertEqual(s.settings.lastExportAt, null);
             s.accounts.forEach(function (a) {
                 assertEqual(a.apr, 0, a.name + '.apr');
@@ -1682,6 +1724,146 @@ describe('Schema migration',
             const s = migrate({ schemaVersion: 1, settings: {}, accounts: [], categories: [], transactions: [] });
             assertEqual(s.categories.length, DEFAULT_CATEGORIES.length,
                 'an empty category list is a fresh or broken state, not a deliberate deletion of all 18');
+        });
+    });
+
+/* ───── Schema migration to v6 ───── */
+
+describe('Schema migration — v6 recorded history',
+    'v6 adds three collections alongside the plan: imported actuals, balance check-ins and ' +
+    'scenarios. A state written by v5 must gain them empty and lose nothing on the way through.',
+    function () {
+        function v5State(over) {
+            return Object.assign({
+                schemaVersion: 5,
+                settings: {
+                    currency: 'GBP', forecastHorizon: 'eoy',
+                    chartHorizons: { balance: '24' }, lastExportAt: '2026-07-01T09:30:00.000Z'
+                },
+                accounts: [
+                    { id: 'a1', name: 'Checking', type: 'checking', startingBalance: 1250.5, asOfDate: '2026-07-31', apr: 0, minPayment: 0 },
+                    { id: 'a2', name: 'Visa', type: 'credit', startingBalance: 800, asOfDate: null, apr: 19.99, minPayment: 35 }
+                ],
+                categories: structuredClone(DEFAULT_CATEGORIES),
+                transactions: [{
+                    id: 't1', name: 'Rent', kind: 'expense', amount: 900, categoryId: 'cat_housing',
+                    accountId: 'a1', fromAccountId: null, frequency: 'monthly', startDate: '2026-01-01',
+                    endDate: null, customN: 1, customUnit: 'days', escalation: 3,
+                    tags: ['home'], notes: 'ground floor flat', paused: false
+                }]
+            }, over || {});
+        }
+
+        it('defaultState opens the three v6 collections empty', function () {
+            const s = defaultState();
+            assertArrayEqual(s.actuals, [], 'defaultState().actuals');
+            assertArrayEqual(s.checkins, [], 'defaultState().checkins');
+            assertArrayEqual(s.scenarios, [], 'defaultState().scenarios');
+        });
+
+        it('defaultState starts on the base plan with no import mappings', function () {
+            const s = defaultState();
+            assertEqual(s.settings.activeScenarioId, null,
+                'a fresh state is the base plan — null, not a scenario id that does not exist');
+            const m = s.settings.importMappings;
+            assert(m && typeof m === 'object' && !Array.isArray(m),
+                'settings.importMappings is an object keyed by accountId, got ' + show(m));
+            assertEqual(Object.keys(m).length, 0);
+        });
+
+        it('a v5 state gains the v6 collections', function () {
+            const s = migrate(v5State());
+            assertEqual(s.schemaVersion, SCHEMA_VERSION);
+            assertArrayEqual(s.actuals, []);
+            assertArrayEqual(s.checkins, []);
+            assertArrayEqual(s.scenarios, []);
+            assertEqual(s.settings.activeScenarioId, null);
+            assertEqual(Object.keys(s.settings.importMappings || {}).length, 0);
+        });
+
+        it('a v5 state keeps every field it arrived with', function () {
+            const s = migrate(v5State());
+            assertEqual(s.settings.currency, 'GBP');
+            assertEqual(s.settings.forecastHorizon, 'eoy');
+            assertEqual(s.settings.chartHorizons.balance, '24');
+            assertEqual(s.settings.lastExportAt, '2026-07-01T09:30:00.000Z');
+            assertEqual(s.accounts.length, 2);
+            assertClose(s.accounts[0].startingBalance, 1250.5, 1e-9);
+            assertEqual(s.accounts[0].asOfDate, '2026-07-31', 'the balance snapshot date survives');
+            assertClose(s.accounts[1].apr, 19.99, 1e-9);
+            assertEqual(s.accounts[1].minPayment, 35);
+            assertEqual(s.transactions[0].escalation, 3);
+            assertArrayEqual(s.transactions[0].tags, ['home']);
+            assertEqual(s.transactions[0].notes, 'ground floor flat');
+            assertEqual(s.categories.length, DEFAULT_CATEGORIES.length);
+        });
+
+        it('history already in the file is not emptied on the way through', function () {
+            const s = migrate(v5State({
+                schemaVersion: SCHEMA_VERSION,
+                actuals: [{
+                    id: 'ac1', date: '2026-07-04', amount: -12.5, payee: 'Cafe', accountId: 'a1',
+                    categoryId: 'cat_dining', importedId: 'FIT-0001', matchedTxId: 't1', source: 'ofx'
+                }],
+                checkins: [{ id: 'ck1', date: '2026-07-31', accountId: 'a1', balance: 1250.5 }],
+                scenarios: [{ id: 'sc1', name: 'Pay rise', ops: [{ op: 'modify', txId: 't1', patch: { amount: 950 } }] }]
+            }));
+            assertEqual(s.actuals.length, 1);
+            assertEqual(s.actuals[0].importedId, 'FIT-0001', 'the dedupe key is the whole point of the record');
+            assertEqual(s.actuals[0].matchedTxId, 't1');
+            assertClose(s.actuals[0].amount, -12.5, 1e-9, 'a signed amount keeps its sign');
+            assertEqual(s.checkins.length, 1);
+            assertClose(s.checkins[0].balance, 1250.5, 1e-9);
+            assertEqual(s.scenarios.length, 1);
+            assertEqual(s.scenarios[0].ops.length, 1);
+            assertEqual(s.scenarios[0].ops[0].patch.amount, 950);
+        });
+
+        it('a v1 state arrives at v6 with the collections too', function () {
+            const s = migrate({
+                schemaVersion: 1,
+                settings: { currency: 'USD', forecastMonths: 18 },
+                accounts: [{ id: 'a1', name: 'Checking', type: 'checking', startingBalance: 100 }],
+                categories: structuredClone(DEFAULT_CATEGORIES),
+                transactions: []
+            });
+            assertEqual(s.schemaVersion, SCHEMA_VERSION);
+            assertArrayEqual(s.actuals, []);
+            assertArrayEqual(s.checkins, []);
+            assertArrayEqual(s.scenarios, []);
+            assertEqual(s.settings.activeScenarioId, null);
+            assertEqual(s.settings.forecastHorizon, '18', 'the v2 conversion still runs');
+        });
+
+        it('a v7 state is still refused', function () {
+            const err = assertThrows(function () {
+                migrate({
+                    schemaVersion: 7,
+                    settings: { currency: 'USD', forecastHorizon: '12', chartHorizons: {} },
+                    accounts: [], categories: [], transactions: [], actuals: [], checkins: [], scenarios: []
+                });
+            }, 'a file from a newer build must be refused, not half-read');
+            assert(err instanceof Error, 'migrate() threw ' + show(err) + ' — it must throw an Error');
+            assert(/version|newer|schema|v7/i.test(err.message || ''),
+                'the message should name the problem, got ' + JSON.stringify(err.message || ''));
+        });
+
+        it('a category deleted before v6 is still not resurrected by the v6 upgrade', function () {
+            const cats = structuredClone(DEFAULT_CATEGORIES).filter(function (c) { return c.id !== 'cat_dining'; });
+            const s = migrate(v5State({ categories: cats }));
+            assertEqual(s.categories.find(function (c) { return c.id === 'cat_dining'; }), undefined,
+                'the user deleted Dining while running v5, and upgrading to v6 handed it back. v6 introduces ' +
+                'no new categories, so there was nothing to backfill: migrate() re-adds every default on any ' +
+                'version bump rather than only the ones the target version actually introduced. The effect is ' +
+                'that deleting a default category can never survive an app update.');
+            assertEqual(s.categories.length, DEFAULT_CATEGORIES.length - 1);
+        });
+
+        it('a malformed collection is replaced rather than trusted', function () {
+            const s = migrate(v5State({ actuals: 'nope', checkins: null, scenarios: 42 }));
+            assert(Array.isArray(s.actuals), 'actuals must end up an array, got ' + show(s.actuals));
+            assert(Array.isArray(s.checkins), 'checkins must end up an array, got ' + show(s.checkins));
+            assert(Array.isArray(s.scenarios), 'scenarios must end up an array, got ' + show(s.scenarios));
         });
     });
 
@@ -1821,6 +2003,1611 @@ describe('Table sorting',
         });
     });
 
+/* ───── Wave 2 — history, scenarios and file parsers ───── */
+
+/* ───── Wave-2 helpers ───── */
+
+// engine.js and importers.js are classic scripts, so their function declarations
+// become properties of window. Resolving a wave-2 function through window rather
+// than through a bare identifier matters: a function that has not been written
+// yet then fails its own tests with a readable message, instead of throwing a
+// ReferenceError while the suite is still being defined and taking every later
+// section down with it.
+function fnOrFail(names, where) {
+    const list = Array.isArray(names) ? names : [names];
+    for (let i = 0; i < list.length; i++) {
+        if (typeof window[list[i]] === 'function') return window[list[i]];
+    }
+    failWith(where + ' does not define ' + list[0] + '(). This suite looked for ' +
+        list.map(function (n) { return n + '()'; }).join(' or ') + '.');
+}
+function engineFn(names) { return fnOrFail(names, 'engine.js'); }
+
+// Walks a returned structure and names every number in it that is not finite.
+// Every one of these results is read by a human; a guard against a zero
+// denominator is the easiest thing in an engine to lose in a refactor.
+function badNumbers(v, path, out, depth) {
+    out = out || [];
+    path = path || 'result';
+    depth = depth || 0;
+    if (typeof v === 'number') {
+        if (!isFinite(v)) out.push(path + ' = ' + v);
+        return out;
+    }
+    if (v == null || v instanceof Date || depth > 7) return out;
+    if (Array.isArray(v)) {
+        v.forEach(function (x, i) { badNumbers(x, path + '[' + i + ']', out, depth + 1); });
+        return out;
+    }
+    if (typeof v === 'object') {
+        Object.keys(v).forEach(function (k) { badNumbers(v[k], path + '.' + k, out, depth + 1); });
+    }
+    return out;
+}
+function assertAllFinite(v, label) {
+    const bad = badNumbers(v, label || 'result');
+    assertEqual(bad.length, 0, 'a non-finite number leaked into a figure a human reads:\n  ' + bad.join('\n  '));
+}
+
+function mkActual(over) {
+    return Object.assign({
+        id: nid('act'),
+        date: todayIso(),
+        amount: -100,          // signed: negative is money out
+        payee: 'Corner Shop',
+        accountId: null,
+        categoryId: 'cat_groceries',
+        importedId: nid('imp'),
+        matchedTxId: null,
+        source: 'csv'
+    }, over || {});
+}
+
+function mkCheckin(over) {
+    return Object.assign({ id: nid('chk'), date: todayIso(), accountId: null, balance: 0 }, over || {});
+}
+
+function mkScenario(over) {
+    return Object.assign({ id: nid('scn'), name: 'What if', ops: [] }, over || {});
+}
+
+/* ───── Scenarios ───── */
+
+function scenarioBase() {
+    return mkState({
+        accounts: [mkAccount({ id: 'a_base', name: 'Checking', type: 'checking', startingBalance: 5000 })],
+        transactions: [
+            mkTx({ id: 'tx_rent', name: 'Rent',   kind: 'expense', amount: 1200, frequency: 'monthly',
+                   startDate: todayIso(), categoryId: 'cat_housing', accountId: 'a_base' }),
+            mkTx({ id: 'tx_pay',  name: 'Salary', kind: 'income',  amount: 3000, frequency: 'monthly',
+                   startDate: todayIso(), categoryId: 'cat_salary',  accountId: 'a_base' })
+        ]
+    });
+}
+function withScenarioOps(ops) {
+    const s = scenarioBase();
+    s.scenarios = [mkScenario({ id: 'scn_1', ops: ops })];
+    return s;
+}
+function txIn(s, id) { return (s.transactions || []).find(function (t) { return t.id === id; }); }
+
+describe('applyScenario — a what-if layered over an untouched plan',
+    'A scenario is a list of ops, never an edit to the saved plan. applyScenario returns a ' +
+    'throwaway copy: if the base state can be changed from here, an abandoned what-if quietly ' +
+    'becomes the user\'s real budget.',
+    function () {
+        it('an add op appends the transaction', function () {
+            const s = withScenarioOps([{ op: 'add', tx: mkTx({
+                id: 'tx_gym', name: 'Gym', kind: 'expense', amount: 40, frequency: 'monthly',
+                startDate: todayIso(), categoryId: 'cat_entertain', accountId: 'a_base' }) }]);
+            const out = engineFn('applyScenario')(s, 'scn_1');
+            assertEqual(out.transactions.length, 3);
+            const added = txIn(out, 'tx_gym');
+            assert(added, 'the added transaction is not in the scenario state');
+            assertClose(added.amount, 40, 1e-9);
+        });
+
+        it('a remove op drops the transaction', function () {
+            const s = withScenarioOps([{ op: 'remove', txId: 'tx_rent' }]);
+            const out = engineFn('applyScenario')(s, 'scn_1');
+            assertEqual(out.transactions.length, 1);
+            assertEqual(txIn(out, 'tx_rent'), undefined);
+            assert(txIn(out, 'tx_pay'), 'removing one transaction must not disturb the others');
+        });
+
+        it('a modify op patches only the fields it names', function () {
+            const s = withScenarioOps([{ op: 'modify', txId: 'tx_rent', patch: { amount: 1350, paused: true } }]);
+            const out = engineFn('applyScenario')(s, 'scn_1');
+            const tx = txIn(out, 'tx_rent');
+            assertClose(tx.amount, 1350, 1e-9);
+            assertEqual(tx.paused, true);
+            assertEqual(tx.name, 'Rent', 'a patch that did not mention the name must not change it');
+            assertEqual(tx.categoryId, 'cat_housing');
+            assertEqual(tx.frequency, 'monthly');
+        });
+
+        it('a modify op can move the dates and the escalator', function () {
+            const s = withScenarioOps([{ op: 'modify', txId: 'tx_rent',
+                patch: { startDate: '2027-01-01', endDate: '2027-12-31', escalation: 4 } }]);
+            const tx = txIn(engineFn('applyScenario')(s, 'scn_1'), 'tx_rent');
+            assertEqual(tx.startDate, '2027-01-01');
+            assertEqual(tx.endDate, '2027-12-31');
+            assertEqual(tx.escalation, 4);
+        });
+
+        it('ops are applied in the order they are listed', function () {
+            const s = withScenarioOps([
+                { op: 'modify', txId: 'tx_rent', patch: { amount: 1300 } },
+                { op: 'modify', txId: 'tx_rent', patch: { amount: 1400 } }
+            ]);
+            assertClose(txIn(engineFn('applyScenario')(s, 'scn_1'), 'tx_rent').amount, 1400, 1e-9,
+                'the later op wins — the list is a sequence, not a set');
+        });
+
+        it('a modify followed by a remove leaves nothing behind', function () {
+            const s = withScenarioOps([
+                { op: 'modify', txId: 'tx_rent', patch: { amount: 1300 } },
+                { op: 'remove', txId: 'tx_rent' }
+            ]);
+            assertEqual(txIn(engineFn('applyScenario')(s, 'scn_1'), 'tx_rent'), undefined);
+        });
+
+        it('a remove followed by an add of the same id ends with the added one', function () {
+            const s = withScenarioOps([
+                { op: 'remove', txId: 'tx_rent' },
+                { op: 'add', tx: mkTx({ id: 'tx_rent', name: 'Rent', kind: 'expense', amount: 1500,
+                                        frequency: 'monthly', startDate: todayIso(),
+                                        categoryId: 'cat_housing', accountId: 'a_base' }) }
+            ]);
+            const tx = txIn(engineFn('applyScenario')(s, 'scn_1'), 'tx_rent');
+            assert(tx, 'the re-added transaction is missing');
+            assertClose(tx.amount, 1500, 1e-9);
+        });
+
+        it('never mutates the state it was given', function () {
+            const s = withScenarioOps([
+                { op: 'modify', txId: 'tx_rent', patch: { amount: 9999 } },
+                { op: 'remove', txId: 'tx_pay' },
+                { op: 'add', tx: mkTx({ id: 'tx_new', name: 'Boat', kind: 'expense', amount: 800,
+                                        frequency: 'monthly', startDate: todayIso(),
+                                        categoryId: 'cat_entertain', accountId: 'a_base' }) }
+            ]);
+            const before = JSON.stringify(s);
+            engineFn('applyScenario')(s, 'scn_1');
+            assertEqual(JSON.stringify(s), before,
+                'the base plan came back changed — a what-if the user walks away from has just been saved');
+        });
+
+        it('returns a deep clone, so editing the result cannot reach back', function () {
+            const s = scenarioBase();
+            const out = engineFn('applyScenario')(s, null);
+            assert(out !== s, 'applyScenario handed back the same object it was given');
+            out.transactions[0].name = 'Rewritten';
+            out.transactions[0].amount = 1;
+            out.accounts[0].startingBalance = -1;
+            out.settings.currency = 'XXX';
+            assertEqual(s.transactions[0].name, 'Rent', 'transactions are shared, not cloned');
+            assertClose(s.transactions[0].amount, 1200, 1e-9);
+            assertClose(s.accounts[0].startingBalance, 5000, 1e-9, 'accounts are shared, not cloned');
+            assertEqual(s.settings.currency, 'USD', 'settings are shared, not cloned');
+        });
+
+        it('a null scenario id returns a clean copy of the base plan', function () {
+            const s = withScenarioOps([{ op: 'remove', txId: 'tx_rent' }]);
+            const out = engineFn('applyScenario')(s, null);
+            assertEqual(out.transactions.length, 2, 'no scenario is selected, so nothing is applied');
+            assert(txIn(out, 'tx_rent'), 'tx_rent should still be there');
+        });
+
+        it('an unknown scenario id returns the base plan rather than throwing', function () {
+            const s = withScenarioOps([{ op: 'remove', txId: 'tx_rent' }]);
+            const out = engineFn('applyScenario')(s, 'scn_deleted_in_another_tab');
+            assertEqual(out.transactions.length, 2);
+            assert(txIn(out, 'tx_rent'));
+        });
+
+        it('an op naming a transaction that is not there is ignored', function () {
+            const s = withScenarioOps([
+                { op: 'modify', txId: 'tx_ghost', patch: { amount: 1 } },
+                { op: 'remove', txId: 'tx_ghost' }
+            ]);
+            const out = engineFn('applyScenario')(s, 'scn_1');
+            assertEqual(out.transactions.length, 2, 'a stale op must not delete something else or throw');
+        });
+
+        it('a malformed op is skipped without taking the rest of the list with it', function () {
+            const s = withScenarioOps([
+                null,
+                { op: 'add' },
+                { op: 'modify', txId: 'tx_rent' },
+                { op: 'nonsense', txId: 'tx_rent' },
+                { op: 'modify', txId: 'tx_rent', patch: { amount: 1250 } }
+            ]);
+            assertClose(txIn(engineFn('applyScenario')(s, 'scn_1'), 'tx_rent').amount, 1250, 1e-9,
+                'the last, well-formed op still has to run');
+        });
+    });
+
+describe('buildForecast under a scenario',
+    'buildForecast(months, { scenarioId }) forecasts the what-if. The global `state` binding it ' +
+    'swaps out has to be back where it was by the time the call returns, throw or no throw.',
+    function () {
+        it('a scenario changes the forecast', function () {
+            const s = withScenarioOps([{ op: 'add', tx: mkTx({
+                id: 'tx_boat', name: 'Boat', kind: 'expense', amount: 900, frequency: 'monthly',
+                startDate: todayIso(), categoryId: 'cat_entertain', accountId: 'a_base' }) }]);
+            withState(s, function () {
+                const base = buildForecast(12);
+                const alt  = buildForecast(12, { scenarioId: 'scn_1' });
+                assertClose(sum(alt.monthlyExpense) - sum(base.monthlyExpense), 900 * 12, 0.5,
+                    'twelve monthly occurrences of the scenario-only expense');
+                assert(alt.runningBalance[11] < base.runningBalance[11],
+                    'spending 900 a month more must end the year lower');
+            });
+        });
+
+        it('a scenario that removes a bill forecasts higher, not lower', function () {
+            const s = withScenarioOps([{ op: 'remove', txId: 'tx_rent' }]);
+            withState(s, function () {
+                const base = buildForecast(12);
+                const alt  = buildForecast(12, { scenarioId: 'scn_1' });
+                assertClose(sum(base.monthlyExpense) - sum(alt.monthlyExpense), 1200 * 12, 0.5);
+                assert(alt.runningBalance[11] > base.runningBalance[11]);
+            });
+        });
+
+        it('the global state is byte-identical afterwards', function () {
+            const s = withScenarioOps([
+                { op: 'modify', txId: 'tx_rent', patch: { amount: 5000 } },
+                { op: 'remove', txId: 'tx_pay' }
+            ]);
+            withState(s, function () {
+                const before = JSON.stringify(state);
+                buildForecast(12, { scenarioId: 'scn_1' });
+                assertEqual(JSON.stringify(state), before,
+                    'the scenario leaked into the live state — every save after this writes the what-if');
+                assertEqual(state, s, 'the `state` binding must point at the same object it did before');
+            });
+        });
+
+        it('an omitted options object still forecasts the base plan', function () {
+            const s = withScenarioOps([{ op: 'remove', txId: 'tx_rent' }]);
+            withState(s, function () {
+                assertClose(sum(buildForecast(12).monthlyExpense),
+                            sum(buildForecast(12, { scenarioId: null }).monthlyExpense), 0.005);
+            });
+        });
+
+        it('an unknown scenario id forecasts the base plan', function () {
+            const s = withScenarioOps([{ op: 'remove', txId: 'tx_rent' }]);
+            withState(s, function () {
+                assertClose(sum(buildForecast(12, { scenarioId: 'scn_gone' }).monthlyExpense),
+                            sum(buildForecast(12).monthlyExpense), 0.005);
+            });
+        });
+
+        it('the forecast says which scenario built it', function () {
+            const s = withScenarioOps([]);
+            withState(s, function () {
+                assertEqual(buildForecast(12, { scenarioId: 'scn_1' }).scenarioId, 'scn_1');
+                assertEqual(buildForecast(12).scenarioId, null, 'the base plan is null, not undefined');
+            });
+        });
+    });
+
+/* ───── Plan versus actual ───── */
+
+// A plan whose every month costs the same, so "the plan for N months" is N times
+// the monthly figure no matter which months the engine lines the actuals up
+// against. A monthly transaction starting today fires once in each month of the
+// horizon, including the current one.
+function uniformPlanState(monthly, catId) {
+    const cash = mkAccount({ id: 'a_var', name: 'Checking', type: 'checking', startingBalance: 100000 });
+    return mkState({
+        accounts: [cash],
+        transactions: [mkTx({
+            id: 'tx_plan', name: 'Planned', kind: 'expense', amount: monthly, frequency: 'monthly',
+            startDate: todayIso(), categoryId: catId, accountId: cash.id
+        })]
+    });
+}
+
+// One outflow per whole elapsed month, most recent first. The current month is
+// deliberately left out: it is still running, and half a month of spending against
+// a whole month of plan reads as an underspend that simply has not happened yet.
+function elapsedActuals(n, amount, catId) {
+    const out = [];
+    for (let i = 1; i <= n; i++) {
+        out.push(mkActual({
+            date: monthsFromNowIso(-i, 15),
+            amount: -Math.abs(amount),
+            categoryId: catId,
+            payee: 'Shop ' + i
+        }));
+    }
+    return out;
+}
+
+describe('computeVariance — the plan against what actually happened',
+    'Planned figures come from the forecast, actual ones from imported history. The comparison is ' +
+    'only honest over whole elapsed months that have data in them: holding a twelve-month plan ' +
+    'against three months of statements invents a 75% underspend.',
+    function () {
+        function variance(monthsOfActuals, actualMonthly, plannedMonthly, catId) {
+            catId = catId || 'cat_groceries';
+            const s = uniformPlanState(plannedMonthly, catId);
+            s.actuals = elapsedActuals(monthsOfActuals, actualMonthly, catId);
+            return withState(s, function () {
+                return engineFn('computeVariance')(buildForecast(12), s.actuals);
+            });
+        }
+        function rowFor(v, catId) {
+            assert(v && Array.isArray(v.byCategory) && Array.isArray(v.byMonth) &&
+                   v.totals && Array.isArray(v.suggestions),
+                'computeVariance must return { byCategory, byMonth, totals, suggestions } — got ' + show(v));
+            const r = v.byCategory.find(function (x) { return x.categoryId === catId; });
+            assert(r, 'no byCategory row for ' + catId + ' — rows were: ' +
+                (v.byCategory.map(function (x) { return x.categoryId; }).join(', ') || '(none)'));
+            return r;
+        }
+        function suggestionFor(v, catId) {
+            return (v.suggestions || []).find(function (x) { return x.categoryId === catId; });
+        }
+
+        it('counts only the elapsed months that have actuals, not the whole horizon', function () {
+            const row = rowFor(variance(3, 1200, 1000), 'cat_groceries');
+            assertEqual(row.months, 3, 'three statements were imported, so three months are being judged');
+            assertClose(Math.abs(row.planned), 3000, 0.005,
+                'three months of a 1000-a-month plan is 3000, not the twelve-month total of 12000');
+        });
+
+        it('the actual is the sum of the imported outflows', function () {
+            const row = rowFor(variance(3, 1200, 1000), 'cat_groceries');
+            assertClose(Math.abs(row.actual), 3600, 0.005);
+        });
+
+        it('delta is actual minus planned', function () {
+            const row = rowFor(variance(3, 1200, 1000), 'cat_groceries');
+            assertClose(row.delta, row.actual - row.planned, 0.005, 'delta must be derived, not guessed');
+            assertClose(Math.abs(row.delta), 600, 0.005, '3600 spent against 3000 planned');
+        });
+
+        it('an underspend deltas the other way', function () {
+            const row = rowFor(variance(3, 800, 1000), 'cat_groceries');
+            assertClose(row.delta, row.actual - row.planned, 0.005);
+            assertClose(Math.abs(row.delta), 600, 0.005, '2400 spent against 3000 planned');
+            assert(row.delta < 0, 'spending less than planned must not read as an overspend');
+        });
+
+        it('pct is the delta over the plan', function () {
+            const row = rowFor(variance(3, 1200, 1000), 'cat_groceries');
+            assert(typeof row.pct === 'number' && isFinite(row.pct), 'pct is ' + show(row.pct));
+            assertClose(Math.abs(row.pct), 20, 0.01, '600 over 3000 is 20%');
+        });
+
+        it('a category the plan never budgeted for reports no percentage at all', function () {
+            const s = uniformPlanState(1000, 'cat_groceries');
+            s.actuals = elapsedActuals(3, 90, 'cat_dining');   // planned nothing, spent something
+            const v = withState(s, function () {
+                return engineFn('computeVariance')(buildForecast(12), s.actuals);
+            });
+            const row = rowFor(v, 'cat_dining');
+            assertClose(Math.abs(row.planned), 0, 0.005);
+            assert(row.pct === null || (typeof row.pct === 'number' && isFinite(row.pct)),
+                'dividing by a zero plan must give null, not Infinity dressed up as a number — got ' + show(row.pct));
+            assertAllFinite(v, 'variance');
+        });
+
+        it('byMonth carries one entry per elapsed month with actuals', function () {
+            const v = variance(3, 1200, 1000);
+            assertEqual(v.byMonth.length, 3);
+            const expectedKeys = [3, 2, 1].map(function (i) { return monthsFromNowIso(-i, 15).slice(0, 7); });
+            assertArrayEqual(v.byMonth.map(function (m) { return m.key; }), expectedKeys,
+                'the months are the ones with statements in them, in calendar order');
+            v.byMonth.forEach(function (m) {
+                assert(typeof m.label === 'string' && m.label.length, 'byMonth entry has no label');
+                assertClose(m.delta, m.actual - m.planned, 0.005, m.key + ' delta');
+            });
+        });
+
+        it('totals agree with the category rows', function () {
+            const v = variance(3, 1200, 1000);
+            assertClose(v.totals.planned, sum(v.byCategory.map(function (r) { return r.planned; })), 0.005);
+            assertClose(v.totals.actual,  sum(v.byCategory.map(function (r) { return r.actual; })),  0.005);
+            assertClose(v.totals.delta, v.totals.actual - v.totals.planned, 0.005);
+        });
+
+        it('no actuals at all is an empty report, not a 100% shortfall', function () {
+            const s = uniformPlanState(1000, 'cat_groceries');
+            const v = withState(s, function () {
+                return engineFn('computeVariance')(buildForecast(12), []);
+            });
+            assertEqual(v.byCategory.length, 0);
+            assertEqual(v.byMonth.length, 0);
+            assertEqual(v.suggestions.length, 0);
+            assertClose(v.totals.delta, 0, 0.005,
+                'importing nothing is not evidence that the plan was wrong');
+        });
+
+        it('actuals only in the current month are not judged yet', function () {
+            const s = uniformPlanState(1000, 'cat_groceries');
+            s.actuals = [mkActual({ date: todayIso(), amount: -50, categoryId: 'cat_groceries' })];
+            const v = withState(s, function () {
+                return engineFn('computeVariance')(buildForecast(12), s.actuals);
+            });
+            assertEqual(v.byMonth.length, 0,
+                'the month is still running, so 50 spent so far is not an underspend of 950');
+        });
+
+        it('a positive actual is money in and is not counted as spending', function () {
+            const s = uniformPlanState(1000, 'cat_groceries');
+            s.actuals = elapsedActuals(3, 1200, 'cat_groceries').concat([
+                mkActual({ date: monthsFromNowIso(-1, 16), amount: 400, categoryId: 'cat_groceries', payee: 'Refund' })
+            ]);
+            const v = withState(s, function () {
+                return engineFn('computeVariance')(buildForecast(12), s.actuals);
+            });
+            assertClose(Math.abs(rowFor(v, 'cat_groceries').actual), 3600, 0.005,
+                'a credit is not an outflow — adding its magnitude to spending would be a 400 overspend that never happened');
+        });
+
+        it('survives an actual with no category, no date and no amount', function () {
+            const s = uniformPlanState(1000, 'cat_groceries');
+            s.actuals = elapsedActuals(2, 1200, 'cat_groceries').concat([
+                mkActual({ categoryId: null, date: monthsFromNowIso(-1, 5), amount: -25 }),
+                mkActual({ date: 'not-a-date', amount: -10 }),
+                mkActual({ date: monthsFromNowIso(-1, 6), amount: NaN }),
+                mkActual({ date: monthsFromNowIso(-1, 7), amount: null })
+            ]);
+            const v = withState(s, function () {
+                return engineFn('computeVariance')(buildForecast(12), s.actuals);
+            });
+            assertAllFinite(v, 'variance');
+        });
+
+        it('a suggestion needs more than the 15% threshold', function () {
+            assertEqual(suggestionFor(variance(3, 1120, 1000), 'cat_groceries'), undefined,
+                '12% over is inside the noise — telling the user to re-plan for that is nagging');
+            assert(suggestionFor(variance(3, 1250, 1000), 'cat_groceries'),
+                '25% over, three months running, is worth saying out loud');
+        });
+
+        it('a suggestion needs at least two months of evidence', function () {
+            assertEqual(suggestionFor(variance(1, 2000, 1000), 'cat_groceries'), undefined,
+                'one month is an anecdote — a single holiday should not rewrite the grocery budget');
+            assert(suggestionFor(variance(2, 2000, 1000), 'cat_groceries'),
+                'two months running is the floor, and this is 100% over it');
+        });
+
+        it('a suggestion carries the monthly figures behind it', function () {
+            const sug = suggestionFor(variance(4, 1400, 1000), 'cat_groceries');
+            assert(sug, 'no suggestion for a category running 40% over for four months');
+            assertClose(sug.plannedMonthly, 1000, 0.005);
+            assertClose(sug.actualMonthly, 1400, 0.005);
+            assertEqual(sug.months, 4);
+            assert(typeof sug.name === 'string' && sug.name.length, 'a suggestion needs a name to show');
+            assert(sug.confidence != null, 'a suggestion without a confidence cannot be weighed');
+        });
+
+        it('two months of evidence is the lowest confidence tier', function () {
+            const a = suggestionFor(variance(2, 1400, 1000), 'cat_groceries');
+            const b = suggestionFor(variance(3, 1400, 1000), 'cat_groceries');
+            assert(a && b, 'both cases should produce a suggestion');
+            assert(a.confidence !== b.confidence,
+                'two months and three months cannot carry the same weight — got ' + show(a.confidence) + ' for both');
+        });
+
+        it('three to five months is one tier', function () {
+            const three = suggestionFor(variance(3, 1400, 1000), 'cat_groceries');
+            const four  = suggestionFor(variance(4, 1400, 1000), 'cat_groceries');
+            const five  = suggestionFor(variance(5, 1400, 1000), 'cat_groceries');
+            assert(three && four && five, 'all three cases should produce a suggestion');
+            assertEqual(four.confidence, three.confidence, 'four months sits in the same tier as three');
+            assertEqual(five.confidence, three.confidence, 'so does five');
+        });
+
+        it('six months or more is the top tier', function () {
+            const five = suggestionFor(variance(5, 1400, 1000), 'cat_groceries');
+            const six  = suggestionFor(variance(6, 1400, 1000), 'cat_groceries');
+            const nine = suggestionFor(variance(9, 1400, 1000), 'cat_groceries');
+            assert(five && six && nine, 'all three cases should produce a suggestion');
+            assert(six.confidence !== five.confidence, 'six months is a step up from five');
+            assertEqual(nine.confidence, six.confidence, 'nine months is the same tier as six');
+        });
+
+        it('confidence rises with the months behind it', function () {
+            const rank = { low: 1, medium: 2, high: 3 };
+            const seen = [2, 4, 8].map(function (n) {
+                const sug = suggestionFor(variance(n, 1400, 1000), 'cat_groceries');
+                assert(sug, 'no suggestion at ' + n + ' months');
+                const r = typeof sug.confidence === 'number' ? sug.confidence : rank[String(sug.confidence).toLowerCase()];
+                assert(r != null, 'unreadable confidence ' + show(sug.confidence) +
+                    ' — expected low / medium / high, or a number');
+                return r;
+            });
+            assert(seen[0] < seen[1] && seen[1] < seen[2],
+                'more months of the same story must not read as less certain: ' + show(seen));
+        });
+
+        it('a missing or malformed forecast returns an empty report', function () {
+            assertAllFinite(engineFn('computeVariance')(null, [mkActual({})]), 'variance');
+            const v = engineFn('computeVariance')(null, [mkActual({})]);
+            assertEqual(v.byCategory.length, 0);
+            assertEqual(v.totals.delta, 0);
+        });
+    });
+
+/* ───── Balance check-ins ───── */
+
+describe('checkinDrift — the plan against a balance the user typed in',
+    'A check-in is the user reading a real balance off their bank. Drift is actual minus ' +
+    'expected: negative means there is less money there than the plan believes.',
+    function () {
+        function driftState(checkins) {
+            const cash = mkAccount({ id: 'a_chk', name: 'Checking', type: 'checking', startingBalance: 1000 });
+            const s = mkState({ accounts: [cash] });
+            s.checkins = checkins || [];
+            return s;
+        }
+        function driftOf(checkins) {
+            const s = driftState(checkins);
+            return withState(s, function () {
+                return engineFn('checkinDrift')(buildForecast(12), s.checkins);
+            });
+        }
+
+        it('returns null when there are no check-ins', function () {
+            assertEqual(driftOf([]), null, 'nothing has been checked, so there is nothing to report');
+        });
+
+        it('returns null for a missing check-in list', function () {
+            const s = driftState([]);
+            withState(s, function () {
+                const fc = buildForecast(12);
+                assertEqual(engineFn('checkinDrift')(fc, null), null);
+                assertEqual(engineFn('checkinDrift')(fc, undefined), null);
+            });
+        });
+
+        it('drift is the actual balance minus the expected one', function () {
+            const d = driftOf([mkCheckin({ accountId: 'a_chk', date: todayIso(), balance: 900 })]);
+            assert(d, 'a check-in against a known account must produce a report');
+            assertClose(d.expected, 1000, 0.005, 'no transactions, so the plan still expects the opening balance');
+            assertClose(d.actual, 900, 0.005);
+            assertClose(d.drift, -100, 0.005, '900 in the account against 1000 expected is 100 short');
+            assertClose(d.drift, d.actual - d.expected, 0.005);
+        });
+
+        it('a balance above the plan drifts positive', function () {
+            const d = driftOf([mkCheckin({ accountId: 'a_chk', date: todayIso(), balance: 1150 })]);
+            assertClose(d.drift, 150, 0.005, 'more money than expected is not a shortfall');
+        });
+
+        it('uses the most recent check-in per account and ignores the older ones', function () {
+            const d = driftOf([
+                mkCheckin({ id: 'chk_old', accountId: 'a_chk', date: daysFromNowIso(-30), balance: 200 }),
+                mkCheckin({ id: 'chk_mid', accountId: 'a_chk', date: daysFromNowIso(-10), balance: 500 }),
+                mkCheckin({ id: 'chk_new', accountId: 'a_chk', date: todayIso(),          balance: 900 })
+            ]);
+            assertClose(d.actual, 900, 0.005,
+                'averaging the readings would blunt the very signal being looked for');
+            assertEqual(d.byAccount.length, 1, 'one account, one row — not one row per reading');
+            assertEqual(d.byAccount[0].checkinId, 'chk_new');
+        });
+
+        it('reports each account separately', function () {
+            const cash = mkAccount({ id: 'a_one', name: 'Checking', type: 'checking', startingBalance: 1000 });
+            const save = mkAccount({ id: 'a_two', name: 'Savings',  type: 'savings',  startingBalance: 4000 });
+            const s = mkState({ accounts: [cash, save] });
+            s.checkins = [
+                mkCheckin({ accountId: 'a_one', date: todayIso(), balance: 900 }),
+                mkCheckin({ accountId: 'a_two', date: todayIso(), balance: 4000 })
+            ];
+            const d = withState(s, function () {
+                return engineFn('checkinDrift')(buildForecast(12), s.checkins);
+            });
+            assertEqual(d.byAccount.length, 2);
+            const one = d.byAccount.find(function (r) { return r.accountId === 'a_one'; });
+            const two = d.byAccount.find(function (r) { return r.accountId === 'a_two'; });
+            assertClose(one.drift, -100, 0.005);
+            assertClose(two.drift, 0, 0.005, 'an account that matches the plan drifts by nothing');
+        });
+
+        it('latest is the newest check-in date in the set', function () {
+            const d = driftOf([
+                mkCheckin({ accountId: 'a_chk', date: daysFromNowIso(-30), balance: 200 }),
+                mkCheckin({ accountId: 'a_chk', date: daysFromNowIso(-3),  balance: 950 })
+            ]);
+            assertEqual(isoOf(asDate(d.latest)), daysFromNowIso(-3));
+        });
+
+        it('a check-in against an account that no longer exists is not a report', function () {
+            assertEqual(driftOf([mkCheckin({ accountId: 'a_deleted', date: todayIso(), balance: 900 })]), null,
+                'there is nothing to compare it with, and inventing an expected balance of zero would show a huge false drift');
+        });
+
+        it('a zero expected balance does not produce Infinity', function () {
+            const cash = mkAccount({ id: 'a_zero', name: 'Checking', type: 'checking', startingBalance: 0 });
+            const s = mkState({ accounts: [cash] });
+            s.checkins = [mkCheckin({ accountId: 'a_zero', date: todayIso(), balance: 40 })];
+            const d = withState(s, function () {
+                return engineFn('checkinDrift')(buildForecast(12), s.checkins);
+            });
+            assertClose(d.drift, 40, 0.005);
+            assert(d.driftPct === null || isFinite(d.driftPct),
+                '40 more than nothing is not "Infinity% out" — got ' + show(d.driftPct));
+            assertAllFinite(d.byAccount, 'byAccount');
+        });
+
+        it('a malformed check-in is skipped, not trusted', function () {
+            const d = driftOf([
+                mkCheckin({ accountId: 'a_chk', date: 'not-a-date', balance: 5 }),
+                mkCheckin({ accountId: 'a_chk', date: todayIso(), balance: 'oops' }),
+                mkCheckin({ accountId: null,    date: todayIso(), balance: 900 }),
+                mkCheckin({ accountId: 'a_chk', date: todayIso(), balance: 900 })
+            ]);
+            assertClose(d.actual, 900, 0.005,
+                'the check-in dated "not-a-date" won. parseDate() hands back an Invalid Date rather than null, ' +
+                'so it clears the guard, and then `d > prev.date` is false against NaN forever — the first ' +
+                'malformed reading is latched in and no real reading can ever displace it.');
+            assertAllFinite(d, 'drift');
+        });
+    });
+
+/* ───── Volatility and confidence bands ───── */
+
+describe('categoryVolatility — the spread of what a category really costs',
+    'Percentiles over whole-month totals, interpolated linearly between the two nearest ' +
+    'observations — the convention a spreadsheet PERCENTILE uses, so a number here can be ' +
+    'checked by hand.',
+    function () {
+        function volOf(actuals) { return engineFn('categoryVolatility')(actuals); }
+
+        // 100, 200, 300, 400 over four whole elapsed months. With n = 4 the
+        // fractional index is 0.25 x 3 = 0.75, so p25 sits three quarters of the
+        // way from 100 to 200 = 175; p50 lands mid-way between 200 and 300 = 250;
+        // p75 a quarter of the way from 300 to 400 = 325.
+        function ladder(catId) {
+            return [100, 200, 300, 400].map(function (v, i) {
+                return mkActual({ date: monthsFromNowIso(-(i + 1), 12), amount: -v, categoryId: catId || 'cat_groceries' });
+            });
+        }
+
+        it('interpolates the quartiles between the two nearest months', function () {
+            const v = volOf(ladder())['cat_groceries'];
+            assert(v, 'no volatility entry for cat_groceries');
+            assertClose(Math.abs(v.p50), 250, 0.005,
+                'the median of 100/200/300/400 is half way between the middle two');
+            const lo = Math.min(Math.abs(v.p25), Math.abs(v.p75));
+            const hi = Math.max(Math.abs(v.p25), Math.abs(v.p75));
+            assertClose(lo, 175, 0.005, 'p25 is three quarters of the way from 100 to 200');
+            assertClose(hi, 325, 0.005, 'p75 is a quarter of the way from 300 to 400');
+        });
+
+        it('the quartiles come back in order', function () {
+            const v = volOf(ladder())['cat_groceries'];
+            assert(v.p25 <= v.p50 && v.p50 <= v.p75,
+                'p25 ' + v.p25 + ', p50 ' + v.p50 + ', p75 ' + v.p75 + ' are not in order');
+        });
+
+        it('reports how many months it saw', function () {
+            assertEqual(volOf(ladder())['cat_groceries'].n, 4);
+        });
+
+        it('several outflows in one month collapse into a single monthly total', function () {
+            const v = volOf([
+                mkActual({ date: monthsFromNowIso(-1, 3),  amount: -60,  categoryId: 'cat_groceries' }),
+                mkActual({ date: monthsFromNowIso(-1, 17), amount: -40,  categoryId: 'cat_groceries' }),
+                mkActual({ date: monthsFromNowIso(-2, 9),  amount: -200, categoryId: 'cat_groceries' }),
+                mkActual({ date: monthsFromNowIso(-3, 9),  amount: -300, categoryId: 'cat_groceries' })
+            ])['cat_groceries'];
+            assertEqual(v.n, 3, 'two shops in one month is one month of history, not two');
+            assertClose(Math.abs(v.p50), 200, 0.005, 'the months are 100, 200 and 300');
+        });
+
+        it('a category with fewer than three months still reports its n', function () {
+            const v = volOf([
+                mkActual({ date: monthsFromNowIso(-1, 12), amount: -100, categoryId: 'cat_dining' }),
+                mkActual({ date: monthsFromNowIso(-2, 12), amount: -140, categoryId: 'cat_dining' })
+            ])['cat_dining'];
+            assert(v, 'a thin category must still appear — a caller has to be able to see the history is thin ' +
+                      'rather than infer it from silence');
+            assertEqual(v.n, 2);
+            assertAllFinite(v, 'volatility');
+        });
+
+        it('a single month gives that month as every quartile', function () {
+            const v = volOf([mkActual({ date: monthsFromNowIso(-1, 12), amount: -80, categoryId: 'cat_dining' })])['cat_dining'];
+            assertEqual(v.n, 1);
+            assertClose(Math.abs(v.p25), 80, 0.005);
+            assertClose(Math.abs(v.p50), 80, 0.005);
+            assertClose(Math.abs(v.p75), 80, 0.005);
+        });
+
+        it('keeps categories apart', function () {
+            const all = volOf(ladder('cat_groceries').concat(ladder('cat_dining')));
+            assertEqual(all['cat_groceries'].n, 4);
+            assertEqual(all['cat_dining'].n, 4);
+        });
+
+        it('the month still running is left out', function () {
+            const all = volOf([mkActual({ date: todayIso(), amount: -500, categoryId: 'cat_dining' })]);
+            const v = all['cat_dining'];
+            assert(!v || v.n === 0,
+                'a month that has not finished holds only part of its spending, and counting it drags every ' +
+                'percentile down towards a total that has not happened yet');
+        });
+
+        it('no actuals gives an empty map, not a crash', function () {
+            assertEqual(Object.keys(volOf([])).length, 0);
+            assertEqual(Object.keys(volOf(null)).length, 0);
+        });
+
+        it('never emits a non-finite quartile', function () {
+            assertAllFinite(volOf([
+                mkActual({ date: monthsFromNowIso(-1, 4), amount: -50, categoryId: 'cat_dining' }),
+                mkActual({ date: 'nope', amount: -10, categoryId: 'cat_dining' }),
+                mkActual({ date: monthsFromNowIso(-2, 4), amount: NaN, categoryId: 'cat_dining' }),
+                mkActual({ date: monthsFromNowIso(-3, 4), amount: -70, categoryId: 'cat_dining' })
+            ]), 'volatility');
+        });
+    });
+
+describe('confidenceBands — a range only where there is history to build one from',
+    'The band is the reason the rest of this exists. A plan with no imported history is perfectly ' +
+    'deterministic, so a band drawn around it would be invented — and it would look exactly as ' +
+    'authoritative on screen as one built from a year of statements.',
+    function () {
+        function bandState() {
+            const cash = mkAccount({ id: 'a_band', name: 'Checking', type: 'checking', startingBalance: 8000 });
+            return mkState({
+                accounts: [cash],
+                transactions: [
+                    mkTx({ id: 'tx_food', name: 'Groceries', kind: 'expense', amount: 400, frequency: 'monthly',
+                           startDate: todayIso(), categoryId: 'cat_groceries', accountId: 'a_band' }),
+                    mkTx({ id: 'tx_pay2', name: 'Salary', kind: 'income', amount: 3000, frequency: 'monthly',
+                           startDate: todayIso(), categoryId: 'cat_salary', accountId: 'a_band' })
+                ]
+            });
+        }
+
+        it('returns null when no category has three months of history, rather than inventing a band around a deterministic plan', function () {
+            const s = bandState();
+            withState(s, function () {
+                const fc = buildForecast(12);
+                const thin = engineFn('categoryVolatility')([
+                    mkActual({ date: monthsFromNowIso(-1, 10), amount: -380, categoryId: 'cat_groceries' }),
+                    mkActual({ date: monthsFromNowIso(-2, 10), amount: -450, categoryId: 'cat_groceries' })
+                ]);
+                assertEqual(thin['cat_groceries'].n, 2, 'the fixture must genuinely be two months');
+                assertEqual(engineFn('confidenceBands')(fc, thin), null,
+                    'two months of statements is not a distribution — a shaded cone drawn from it would be ' +
+                    'false precision, and the user cannot tell the difference by looking');
+            });
+        });
+
+        it('returns null with no volatility at all', function () {
+            const s = bandState();
+            withState(s, function () {
+                const fc = buildForecast(12);
+                assertEqual(engineFn('confidenceBands')(fc, {}), null, 'an empty volatility map');
+                assertEqual(engineFn('confidenceBands')(fc, null), null, 'no volatility map');
+            });
+        });
+
+        it('builds a band once a category has three months', function () {
+            const s = bandState();
+            withState(s, function () {
+                const fc = buildForecast(12);
+                const vol = engineFn('categoryVolatility')([
+                    mkActual({ date: monthsFromNowIso(-1, 10), amount: -300, categoryId: 'cat_groceries' }),
+                    mkActual({ date: monthsFromNowIso(-2, 10), amount: -400, categoryId: 'cat_groceries' }),
+                    mkActual({ date: monthsFromNowIso(-3, 10), amount: -500, categoryId: 'cat_groceries' })
+                ]);
+                assertEqual(vol['cat_groceries'].n, 3);
+                const bands = engineFn('confidenceBands')(fc, vol);
+                assert(bands, 'three months is the documented floor — a band was expected here');
+                ['p25', 'p50', 'p75'].forEach(function (k) {
+                    assert(Array.isArray(bands[k]), 'bands.' + k + ' must be an array, got ' + show(bands[k]));
+                    assertEqual(bands[k].length, fc.monthList.length, 'bands.' + k + ' must cover the whole horizon');
+                });
+                assertAllFinite(bands, 'bands');
+            });
+        });
+
+        it('the middle line lies between the outer two at every month', function () {
+            const s = bandState();
+            withState(s, function () {
+                const fc = buildForecast(12);
+                const vol = engineFn('categoryVolatility')([
+                    mkActual({ date: monthsFromNowIso(-1, 10), amount: -300, categoryId: 'cat_groceries' }),
+                    mkActual({ date: monthsFromNowIso(-2, 10), amount: -400, categoryId: 'cat_groceries' }),
+                    mkActual({ date: monthsFromNowIso(-3, 10), amount: -500, categoryId: 'cat_groceries' }),
+                    mkActual({ date: monthsFromNowIso(-4, 10), amount: -600, categoryId: 'cat_groceries' })
+                ]);
+                const b = engineFn('confidenceBands')(fc, vol);
+                assert(b, 'four months should build a band');
+                for (let i = 0; i < b.p50.length; i++) {
+                    const lo = Math.min(b.p25[i], b.p75[i]);
+                    const hi = Math.max(b.p25[i], b.p75[i]);
+                    assert(b.p50[i] >= lo - 0.005 && b.p50[i] <= hi + 0.005,
+                        'month ' + i + ': the middle line ' + b.p50[i] + ' is outside [' + lo + ', ' + hi + ']');
+                }
+            });
+        });
+
+        it('a category with history spreads the band apart', function () {
+            const s = bandState();
+            withState(s, function () {
+                const fc = buildForecast(12);
+                const vol = engineFn('categoryVolatility')([
+                    mkActual({ date: monthsFromNowIso(-1, 10), amount: -200, categoryId: 'cat_groceries' }),
+                    mkActual({ date: monthsFromNowIso(-2, 10), amount: -400, categoryId: 'cat_groceries' }),
+                    mkActual({ date: monthsFromNowIso(-3, 10), amount: -600, categoryId: 'cat_groceries' })
+                ]);
+                const b = engineFn('confidenceBands')(fc, vol);
+                assert(b, 'three months should build a band');
+                const last = b.p50.length - 1;
+                assert(Math.abs(b.p25[last] - b.p75[last]) > 0.005,
+                    'a category that swung between 200 and 600 a month cannot produce a band of zero width');
+            });
+        });
+    });
+
+/* ───── Bills calendar ───── */
+
+describe('billsCalendar — the same forecast, cut by day instead of by month',
+    'The calendar is a second view of numbers the forecast already computed. If the days do not ' +
+    'add back up to the months, one of the two screens is lying and there is no way to tell which.',
+    function () {
+        function calendarState() {
+            const cash = mkAccount({ id: 'a_cal', name: 'Checking', type: 'checking', startingBalance: 9000 });
+            return mkState({
+                accounts: [cash],
+                transactions: [
+                    mkTx({ id: 'tx_rent2', name: 'Rent', kind: 'expense', amount: 1200, frequency: 'monthly',
+                           startDate: todayIso(), categoryId: 'cat_housing', accountId: 'a_cal' }),
+                    mkTx({ id: 'tx_food2', name: 'Groceries', kind: 'expense', amount: 90, frequency: 'weekly',
+                           startDate: todayIso(), categoryId: 'cat_groceries', accountId: 'a_cal' }),
+                    mkTx({ id: 'tx_sub2', name: 'Streaming', kind: 'expense', amount: 12, frequency: 'monthly',
+                           startDate: todayIso(), categoryId: 'cat_subs', accountId: 'a_cal' })
+                ]
+            });
+        }
+        function monthKeyOf(d) {
+            const x = asDate(d);
+            return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0');
+        }
+
+        it('day totals add back up to the month totals of the same forecast', function () {
+            withState(calendarState(), function () {
+                const fc = buildForecast(6);
+                const days = engineFn('billsCalendar')(fc, fc.cutoffDate, 4);
+                assert(Array.isArray(days) && days.length, 'the calendar came back empty for a plan full of bills');
+                const perMonth = {};
+                days.forEach(function (d) {
+                    const k = monthKeyOf(d.date);
+                    perMonth[k] = (perMonth[k] || 0) + d.net;
+                });
+                const index = {};
+                fc.monthList.forEach(function (m, i) { index[m.key] = i; });
+                let compared = 0;
+                Object.keys(perMonth).forEach(function (k) {
+                    const i = index[k];
+                    assert(i != null, 'the calendar produced ' + k + ', which is not a month of the forecast');
+                    assertClose(perMonth[k], fc.monthlyNet[i], 0.005,
+                        k + ': the days sum to ' + perMonth[k] + ' but the month says ' + fc.monthlyNet[i]);
+                    compared++;
+                });
+                assert(compared >= 3, 'only ' + compared + ' month(s) were reconciled — the fixture proves too little');
+            });
+        });
+
+        it('income lands on the calendar as well as bills', function () {
+            const s = calendarState();
+            s.transactions.push(mkTx({ id: 'tx_pay3', name: 'Salary', kind: 'income', amount: 3000,
+                frequency: 'monthly', startDate: todayIso(), categoryId: 'cat_salary', accountId: 'a_cal' }));
+            withState(s, function () {
+                const fc = buildForecast(6);
+                const days = engineFn('billsCalendar')(fc, fc.cutoffDate, 3);
+                const payday = days.find(function (d) {
+                    return d.items.some(function (i) { return i.name === 'Salary'; });
+                });
+                assert(payday, 'a calendar that only shows money going out cannot show a day the user is safe on');
+                assert(payday.net > 0, 'payday nets positive, got ' + payday.net);
+            });
+        });
+
+        it('each day nets the sum of its own items', function () {
+            withState(calendarState(), function () {
+                const fc = buildForecast(6);
+                engineFn('billsCalendar')(fc, fc.cutoffDate, 3).forEach(function (d) {
+                    assertClose(d.net, sum(d.items.map(function (i) { return i.amount; })), 0.005,
+                        isoOf(asDate(d.date)) + ': net and items disagree');
+                });
+            });
+        });
+
+        it('only days with something due are listed', function () {
+            withState(calendarState(), function () {
+                const fc = buildForecast(6);
+                engineFn('billsCalendar')(fc, fc.cutoffDate, 3).forEach(function (d) {
+                    assert(Array.isArray(d.items) && d.items.length > 0,
+                        isoOf(asDate(d.date)) + ' has no items — an empty day is not a calendar entry');
+                });
+            });
+        });
+
+        it('every entry carries a real Date and named items', function () {
+            withState(calendarState(), function () {
+                const fc = buildForecast(6);
+                const days = engineFn('billsCalendar')(fc, fc.cutoffDate, 2);
+                days.forEach(function (d) {
+                    assert(d.date instanceof Date, 'day.date must be a Date, got ' + show(d.date));
+                    d.items.forEach(function (i) {
+                        assert(typeof i.name === 'string' && i.name.length, 'an item with no name');
+                        assert(isFinite(i.amount), 'an item with a non-finite amount: ' + show(i.amount));
+                    });
+                });
+                assertAllFinite(days.map(function (d) { return { net: d.net, items: d.items }; }), 'calendar');
+            });
+        });
+
+        it('days are in date order and stay inside the window asked for', function () {
+            withState(calendarState(), function () {
+                const fc = buildForecast(6);
+                const from = fc.cutoffDate;
+                const days = engineFn('billsCalendar')(fc, from, 2);
+                let prev = null;
+                days.forEach(function (d) {
+                    const iso = isoOf(asDate(d.date));
+                    if (prev) assert(iso >= prev, 'out of order: ' + prev + ' then ' + iso);
+                    prev = iso;
+                    assert(iso >= isoOf(asDate(from)), iso + ' is before the date the calendar was asked to start at');
+                });
+            });
+        });
+
+        it('a plan with nothing in it produces an empty calendar', function () {
+            withState(mkState(), function () {
+                assertArrayEqual(engineFn('billsCalendar')(buildForecast(6), new Date(), 3), []);
+            });
+        });
+
+        it('a transfer between the user\'s own accounts is not a bill', function () {
+            const from = mkAccount({ id: 'a_f', name: 'Checking', type: 'checking', startingBalance: 3000 });
+            const to   = mkAccount({ id: 'a_t', name: 'Savings',  type: 'savings',  startingBalance: 0 });
+            const s = mkState({
+                accounts: [from, to],
+                transactions: [mkTx({ id: 'tx_mv', name: 'To savings', kind: 'transfer', amount: 250,
+                    frequency: 'monthly', startDate: todayIso(), categoryId: 'cat_savings',
+                    accountId: 'a_t', fromAccountId: 'a_f' })]
+            });
+            withState(s, function () {
+                const fc = buildForecast(6);
+                const days = engineFn('billsCalendar')(fc, fc.cutoffDate, 3);
+                const named = days.filter(function (d) {
+                    return d.items.some(function (i) { return i.name === 'To savings'; });
+                });
+                assertEqual(named.length, 0,
+                    'moving money between your own accounts is not a bill anyone is charging you');
+            });
+        });
+    });
+
+/* ───── Matching imported actuals to the plan ───── */
+
+describe('matchActuals — settling planned occurrences against imported rows',
+    'A match says "this line on the statement is that bill". Getting it wrong marks a bill paid ' +
+    'that has not been paid, so the rules are narrow: the amount has to agree including its sign, ' +
+    'the date has to be inside the window, and one occurrence can only be settled once.',
+    function () {
+        function planState(txs) {
+            const cash = mkAccount({ id: 'a_m', name: 'Checking', type: 'checking', startingBalance: 5000 });
+            return mkState({ accounts: [cash], transactions: txs });
+        }
+        function rentPlan() {
+            return planState([mkTx({ id: 'tx_rent3', name: 'Rent', kind: 'expense', amount: 1200,
+                frequency: 'monthly', startDate: todayIso(), categoryId: 'cat_housing', accountId: 'a_m' })]);
+        }
+        function match(s, actuals, win) {
+            return withState(s, function () {
+                return engineFn('matchActuals')(actuals, buildForecast(6), win);
+            });
+        }
+
+        it('an exact amount on the exact day is an exact match', function () {
+            const out = match(rentPlan(), [mkActual({ id: 'ac_1', date: todayIso(), amount: -1200, categoryId: 'cat_housing' })], 5);
+            assertEqual(out.length, 1);
+            assertEqual(out[0].actualId, 'ac_1');
+            assertEqual(out[0].txId, 'tx_rent3');
+            assertEqual(out[0].dateDelta, 0);
+            assertEqual(out[0].exact, true);
+        });
+
+        it('a few days late still matches, but not exactly', function () {
+            const out = match(rentPlan(), [mkActual({ id: 'ac_2', date: daysFromNowIso(2), amount: -1200, categoryId: 'cat_housing' })], 5);
+            assertEqual(out.length, 1);
+            assertEqual(Math.abs(out[0].dateDelta), 2, 'the drift is reported so the user can see it');
+            assertEqual(out[0].exact, false, 'the right money on the wrong day is a match, not an exact one');
+        });
+
+        it('outside the window is not a match', function () {
+            assertArrayEqual(match(rentPlan(), [mkActual({ id: 'ac_3', date: daysFromNowIso(9), amount: -1200, categoryId: 'cat_housing' })], 5), [],
+                'nine days out with a five day window is a different payment');
+        });
+
+        it('a different amount is not a match', function () {
+            assertArrayEqual(match(rentPlan(), [mkActual({ id: 'ac_4', date: todayIso(), amount: -1300, categoryId: 'cat_housing' })], 5), []);
+        });
+
+        it('a rounding-sized difference still matches', function () {
+            const out = match(rentPlan(), [mkActual({ id: 'ac_5', date: todayIso(), amount: -1200.01, categoryId: 'cat_housing' })], 5);
+            assertEqual(out.length, 1, 'a penny either way is the same payment');
+            assertEqual(out[0].exact, false, 'but it is not exact');
+        });
+
+        it('the sign has to agree', function () {
+            assertArrayEqual(match(rentPlan(), [mkActual({ id: 'ac_6', date: todayIso(), amount: 1200, categoryId: 'cat_housing' })], 5), [],
+                'a 1200 refund arriving is not the 1200 rent going out — matching on magnitude alone would settle the bill from the wrong direction');
+        });
+
+        it('money in matches planned income', function () {
+            const s = planState([mkTx({ id: 'tx_pay4', name: 'Salary', kind: 'income', amount: 2500,
+                frequency: 'monthly', startDate: todayIso(), categoryId: 'cat_salary', accountId: 'a_m' })]);
+            const out = match(s, [mkActual({ id: 'ac_7', date: todayIso(), amount: 2500, categoryId: 'cat_salary' })], 5);
+            assertEqual(out.length, 1);
+            assertEqual(out[0].txId, 'tx_pay4');
+        });
+
+        it('one planned occurrence is claimed at most once', function () {
+            const s = planState([mkTx({ id: 'tx_once', name: 'Insurance', kind: 'expense', amount: 300,
+                frequency: 'one-time', startDate: todayIso(), categoryId: 'cat_insurance', accountId: 'a_m' })]);
+            const out = match(s, [
+                mkActual({ id: 'ac_8a', date: todayIso(), amount: -300, categoryId: 'cat_insurance' }),
+                mkActual({ id: 'ac_8b', date: todayIso(), amount: -300, categoryId: 'cat_insurance' })
+            ], 5);
+            assertEqual(out.length, 1,
+                'two identical lines on the statement against one planned charge — the second is a duplicate or a separate purchase, not the same bill paid twice');
+        });
+
+        it('one actual settles at most one occurrence', function () {
+            const s = planState([
+                mkTx({ id: 'tx_a', name: 'Bill A', kind: 'expense', amount: 300, frequency: 'one-time',
+                       startDate: todayIso(), categoryId: 'cat_utilities', accountId: 'a_m' }),
+                mkTx({ id: 'tx_b', name: 'Bill B', kind: 'expense', amount: 300, frequency: 'one-time',
+                       startDate: todayIso(), categoryId: 'cat_utilities', accountId: 'a_m' })
+            ]);
+            const out = match(s, [mkActual({ id: 'ac_9', date: todayIso(), amount: -300, categoryId: 'cat_utilities' })], 5);
+            assertEqual(out.length, 1);
+            assertEqual(out.filter(function (m) { return m.actualId === 'ac_9'; }).length, 1);
+        });
+
+        it('the nearest planned date wins', function () {
+            const s = planState([
+                mkTx({ id: 'tx_far',  name: 'Far',  kind: 'expense', amount: 300, frequency: 'one-time',
+                       startDate: todayIso(), categoryId: 'cat_utilities', accountId: 'a_m' }),
+                mkTx({ id: 'tx_near', name: 'Near', kind: 'expense', amount: 300, frequency: 'one-time',
+                       startDate: daysFromNowIso(6), categoryId: 'cat_utilities', accountId: 'a_m' })
+            ]);
+            const out = match(s, [mkActual({ id: 'ac_10', date: daysFromNowIso(5), amount: -300, categoryId: 'cat_utilities' })], 7);
+            assertEqual(out.length, 1);
+            assertEqual(out[0].txId, 'tx_near', 'one day away beats five days away');
+            assertEqual(Math.abs(out[0].dateDelta), 1);
+        });
+
+        it('two months of statements settle two months of the same bill', function () {
+            // Next month's occurrence is 28 to 31 days out depending on the month,
+            // so a three-day window reaches it from a fixed +30 whatever today is.
+            const out = match(rentPlan(), [
+                mkActual({ id: 'ac_11a', date: todayIso(), amount: -1200, categoryId: 'cat_housing' }),
+                mkActual({ id: 'ac_11b', date: daysFromNowIso(30), amount: -1200, categoryId: 'cat_housing' })
+            ], 3);
+            assertEqual(out.length, 2, 'each month has its own occurrence to settle against');
+            assertEqual(new Set(out.map(function (m) { return m.actualId; })).size, 2);
+        });
+
+        it('a transfer is not something a statement line can settle', function () {
+            const from = mkAccount({ id: 'a_x', name: 'Checking', type: 'checking', startingBalance: 3000 });
+            const to   = mkAccount({ id: 'a_y', name: 'Savings',  type: 'savings',  startingBalance: 0 });
+            const s = mkState({
+                accounts: [from, to],
+                transactions: [mkTx({ id: 'tx_mv2', name: 'To savings', kind: 'transfer', amount: 250,
+                    frequency: 'monthly', startDate: todayIso(), categoryId: 'cat_savings',
+                    accountId: 'a_y', fromAccountId: 'a_x' })]
+            });
+            assertArrayEqual(match(s, [mkActual({ id: 'ac_12', date: todayIso(), amount: -250, categoryId: 'cat_savings' })], 5), [],
+                'a transfer has no direction of its own, so there is nothing to agree with');
+        });
+
+        it('an empty input on either side matches nothing', function () {
+            const s = rentPlan();
+            assertArrayEqual(match(s, [], 5), []);
+            assertArrayEqual(match(s, null, 5), []);
+            assertArrayEqual(engineFn('matchActuals')([mkActual({})], null, 5), []);
+        });
+
+        it('a malformed actual is skipped rather than matched', function () {
+            const out = match(rentPlan(), [
+                mkActual({ id: 'ac_bad1', date: 'not-a-date', amount: -1200 }),
+                mkActual({ id: 'ac_bad2', date: todayIso(), amount: 'oops' }),
+                mkActual({ id: 'ac_bad3', date: todayIso(), amount: 0 }),
+                mkActual({ id: 'ac_good', date: todayIso(), amount: -1200 })
+            ], 5);
+            assertEqual(out.length, 1);
+            assertEqual(out[0].actualId, 'ac_good',
+                'the row dated "not-a-date" was matched instead. parseDate() returns an Invalid Date rather ' +
+                'than null, so the row survives the guard and then settles a real bill against a date that ' +
+                'does not exist.');
+        });
+
+        it('every dateDelta is a whole number of days', function () {
+            const out = match(rentPlan(), [
+                mkActual({ id: 'ac_13a', date: daysFromNowIso(1), amount: -1200 }),
+                mkActual({ id: 'ac_13b', date: daysFromNowIso(30), amount: -1200 })
+            ], 4);
+            assert(out.length > 0, 'expected at least one match to inspect');
+            out.forEach(function (m) {
+                assert(Number.isInteger(m.dateDelta), 'dateDelta ' + show(m.dateDelta) + ' is not a whole number of days');
+                assertEqual(typeof m.exact, 'boolean', 'exact must be a boolean, got ' + show(m.exact));
+            });
+        });
+    });
+
+/* ───── Importers ───── */
+
+// importers.js is loaded on this page with only engine.js underneath it, and
+// that is the point: a parser is the one part of an import that has to be
+// testable without a browser page around it. The parser entry points live on an
+// Importers namespace, so resolve through that first and fall back to a bare
+// global, and name every candidate in the failure when nothing is found.
+function importerNS() { return window.Importers || {}; }
+
+function parserFn(names) {
+    const list = Array.isArray(names) ? names : [names];
+    const ns = importerNS();
+    for (let i = 0; i < list.length; i++) {
+        if (typeof ns[list[i]] === 'function') return ns[list[i]];
+        if (typeof window[list[i]] === 'function') return window[list[i]];
+    }
+    failWith('importers.js does not export ' + list[0] + '(). This suite looked for ' +
+        list.map(function (n) { return n + '()'; }).join(' or ') +
+        ', on window.Importers and on window.');
+}
+
+// The parsers hand back a result object rather than a bare array. A CSV result
+// splits the header out; put it back so the grid reads the way the file does.
+function csvGrid(out) {
+    if (Array.isArray(out)) return out;
+    if (out && Array.isArray(out.rows)) {
+        return (Array.isArray(out.headers) && out.headers.length)
+            ? [out.headers].concat(out.rows)
+            : out.rows;
+    }
+    failWith('parseCSV returned ' + show(out) + ' — expected { rows: [...] } or an array of row arrays');
+}
+function recordsOf(out, who) {
+    if (Array.isArray(out)) return out;
+    if (out && Array.isArray(out.rows)) return out.rows;
+    if (out && Array.isArray(out.records)) return out.records;
+    if (out && Array.isArray(out.transactions)) return out.transactions;
+    failWith(who + ' returned ' + show(out) + ' — expected { rows: [...] } or an array of records');
+}
+function fieldOf(rec, names) {
+    for (let i = 0; i < names.length; i++) {
+        if (rec && rec[names[i]] !== undefined && rec[names[i]] !== null) return rec[names[i]];
+    }
+    return undefined;
+}
+function payeeOf(rec)      { return fieldOf(rec, ['payee', 'name', 'description']); }
+function amountOf(rec)     { return fieldOf(rec, ['amount', 'value']); }
+function dateOf(rec)       { return fieldOf(rec, ['date', 'posted']); }
+function importedIdOf(rec) { return fieldOf(rec, ['importedId', 'fitid', 'fitId']); }
+
+const OFX_SGML =
+    'OFXHEADER:100\r\n' +
+    'DATA:OFXSGML\r\n' +
+    'VERSION:102\r\n' +
+    'SECURITY:NONE\r\n' +
+    '\r\n' +
+    '<OFX>\n' +
+    '<SIGNONMSGSRSV1><SONRS><STATUS><CODE>0<SEVERITY>INFO</STATUS>\n' +
+    '<DTSERVER>20260201120000<LANGUAGE>ENG\n' +
+    '<FI><ORG>Test Bank<FID>0001</FI></SONRS></SIGNONMSGSRSV1>\n' +
+    '<BANKMSGSRSV1><STMTTRNRS><TRNUID>1<STMTRS><CURDEF>USD\n' +
+    '<BANKACCTFROM><BANKID>000000000<ACCTID>0000000001<ACCTTYPE>CHECKING</BANKACCTFROM>\n' +
+    '<BANKTRANLIST><DTSTART>20260101<DTEND>20260131\n' +
+    '<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260105120000<TRNAMT>-4.50<FITID>FIT-0001<NAME>COFFEE SHOP</STMTTRN>\n' +
+    '<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20260110<TRNAMT>2500.00<FITID>FIT-0002<NAME>ACME PAYROLL</STMTTRN>\n' +
+    '</BANKTRANLIST><LEDGERBAL><BALAMT>3120.44<DTASOF>20260131</LEDGERBAL>\n' +
+    '</STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>\n';
+
+const OFX_XML =
+    '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' +
+    '<?OFX OFXHEADER="200" VERSION="211" SECURITY="NONE" OLDFILEUID="NONE" NEWFILEUID="NONE"?>\n' +
+    '<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>USD</CURDEF>\n' +
+    '<BANKTRANLIST><DTSTART>20260101</DTSTART><DTEND>20260131</DTEND>\n' +
+    '<STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20260105120000</DTPOSTED>' +
+    '<TRNAMT>-4.50</TRNAMT><FITID>FIT-0001</FITID><NAME>COFFEE SHOP</NAME></STMTTRN>\n' +
+    '<STMTTRN><TRNTYPE>CREDIT</TRNTYPE><DTPOSTED>20260110</DTPOSTED>' +
+    '<TRNAMT>2500.00</TRNAMT><FITID>FIT-0002</FITID><NAME>ACME PAYROLL</NAME></STMTTRN>\n' +
+    '</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>\n';
+
+// Deliberately obvious placeholders. Exports from some banks really do carry the
+// sign-on block through into the downloaded file.
+const OFX_USERID = 'test-user-do-not-keep';
+const OFX_USERPASS = 'test-password-do-not-keep';
+const OFX_WITH_CREDENTIALS =
+    'OFXHEADER:100\r\nDATA:OFXSGML\r\nVERSION:102\r\n\r\n' +
+    '<OFX><SIGNONMSGSRSV1><SONRS><STATUS><CODE>0<SEVERITY>INFO</STATUS>\n' +
+    '<SONRQ><DTCLIENT>20260201<USERID>' + OFX_USERID + '<USERPASS>' + OFX_USERPASS +
+    '<LANGUAGE>ENG</SONRQ></SONRS></SIGNONMSGSRSV1>\n' +
+    '<BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>\n' +
+    '<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260105<TRNAMT>-4.50<FITID>FIT-0001<NAME>COFFEE SHOP</STMTTRN>\n' +
+    '</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>\n';
+
+// The 25th settles the whole column as month-first, so both dates in this file
+// resolve without anything being guessed.
+const QIF_BANK =
+    '!Type:Bank\n' +
+    'D01/25/2026\n' +
+    'T-4.50\n' +
+    'PCoffee Shop\n' +
+    'MFlat white\n' +
+    'NCHK\n' +
+    '^\n' +
+    'D02/03/2026\n' +
+    'T2,500.00\n' +
+    'PAcme Payroll\n' +
+    '^\n';
+
+describe('Importers — the file stands on its own',
+    'A parser that needs app.js to be present cannot be tested without a whole application around ' +
+    'it, and cannot be reasoned about either. This page loads engine.js and importers.js, and ' +
+    'nothing else.',
+    function () {
+        it('importers.js is being served', function () {
+            if (SCRIPT_LOAD.failed.some(function (s) { return /importers\.js/.test(s); })) {
+                failWith('importers.js did not load — the file is missing, or the server is not serving it.');
+            }
+            assert(window.Importers && typeof window.Importers === 'object',
+                'importers.js loaded but exported no Importers namespace');
+        });
+
+        it('importers.js loads without app.js underneath it', function () {
+            const threw = SCRIPT_LOAD.threw.filter(function (m) { return /importers\.js/.test(m); });
+            assertEqual(threw.length, 0,
+                'importers.js threw while loading with only engine.js present:\n  ' + threw.join('\n  ') +
+                '\n  A parser file must not reach for app.js globals at load time.');
+        });
+
+        it('the parser entry points are all exported', function () {
+            const missing = ['parseCSV', 'parseOFX', 'parseQIF'].filter(function (n) {
+                return typeof importerNS()[n] !== 'function' && typeof window[n] !== 'function';
+            });
+            assertEqual(missing.length, 0, 'importers.js does not export: ' + missing.join(', '));
+        });
+    });
+
+describe('Importers — parseCSV',
+    'Bank CSV is not a well-behaved format: quoted commas, quoted newlines, doubled quotes, a ' +
+    'byte-order mark from a spreadsheet round-trip, and four different separators depending on ' +
+    'which country the export came from.',
+    function () {
+        function rows(text) { return csvGrid(parserFn('parseCSV')(text)); }
+
+        it('a quoted field keeps its embedded comma', function () {
+            const r = rows('Date,Description,Amount\n2026-01-05,"Coffee, large",-4.50\n');
+            assertEqual(r.length, 2, 'header plus one row');
+            assertEqual(r[1].length, 3, 'the quoted comma must not split the row into four cells');
+            assertEqual(r[1][1], 'Coffee, large');
+            assertEqual(r[1][2], '-4.50');
+        });
+
+        it('a doubled quote inside a quoted field becomes one quote', function () {
+            assertEqual(rows('Date,Description,Amount\n2026-01-06,"He said ""hello""",-10.00\n')[1][1],
+                'He said "hello"');
+        });
+
+        it('a quoted field may run over a line break', function () {
+            const r = rows('Date,Description,Amount\n2026-01-07,"Line one\nLine two",-20.00\n');
+            assertEqual(r.length, 2, 'the newline is inside quotes, so it is not a row break');
+            assertEqual(r[1][1], 'Line one\nLine two');
+        });
+
+        it('CRLF endings leave no stray carriage return in a cell', function () {
+            const r = rows('Date,Description,Amount\r\n2026-01-05,Coffee,-4.50\r\n');
+            assertEqual(r.length, 2);
+            assertEqual(r[1][2], '-4.50', 'a trailing \\r turns every amount into a string that will not parse');
+            const stray = [];
+            r.forEach(function (row, i) {
+                row.forEach(function (c, j) { if (/\r/.test(String(c))) stray.push('row ' + i + ' cell ' + j); });
+            });
+            assertEqual(stray.length, 0, 'carriage returns left in: ' + stray.join(', '));
+        });
+
+        it('a byte-order mark does not become part of the first header', function () {
+            assertEqual(rows('\uFEFF' + 'Date,Description,Amount\n2026-01-05,Coffee,-4.50\n')[0][0], 'Date',
+                'a BOM welded to the first header makes the date column unmappable, and it is invisible on screen');
+        });
+
+        it('a trailing newline does not add an empty row', function () {
+            const r = rows('Date,Amount\n2026-01-05,-4.50\n');
+            assertEqual(r.length, 2);
+            assert(r[r.length - 1].join('').length > 0, 'the last row is blank — a phantom transaction');
+        });
+
+        it('semicolon-separated files are detected', function () {
+            const r = rows('Date;Description;Amount\n2026-01-05;Coffee;-4.50\n');
+            assertArrayEqual(r[0], ['Date', 'Description', 'Amount']);
+            assertEqual(r[1].length, 3);
+        });
+
+        it('tab-separated files are detected', function () {
+            const r = rows('Date\tDescription\tAmount\n2026-01-05\tCoffee\t-4.50\n');
+            assertArrayEqual(r[0], ['Date', 'Description', 'Amount']);
+            assertEqual(r[1][2], '-4.50');
+        });
+
+        it('pipe-separated files are detected', function () {
+            const r = rows('Date|Description|Amount\n2026-01-05|Coffee|-4.50\n');
+            assertArrayEqual(r[0], ['Date', 'Description', 'Amount']);
+            assertEqual(r[1][2], '-4.50');
+        });
+
+        it('a comma inside a quoted field does not outvote the real separator', function () {
+            const r = rows('Date;Description;Amount\n2026-01-05;"Coffee, large";-4.50\n2026-01-06;"Tea, small";-2.20\n');
+            assertEqual(r.length, 3);
+            assertEqual(r[1].length, 3, 'counting commas without respecting quotes picks the wrong separator here');
+            assertEqual(r[1][1], 'Coffee, large');
+        });
+
+        it('the separator it settled on is reported', function () {
+            const out = parserFn('parseCSV')('Date;Description;Amount\n2026-01-05;Coffee;-4.50\n');
+            if (out && out.delimiter !== undefined) {
+                assertEqual(out.delimiter, ';', 'the user has to be able to see, and correct, the guess');
+            } else {
+                skip('parseCSV does not report the delimiter it chose; the behavioural tests above cover the detection');
+            }
+        });
+
+        it('an empty file parses to nothing rather than one blank row', function () {
+            assertEqual(rows('').length, 0);
+            assertEqual(rows('\n').length, 0);
+        });
+    });
+
+describe('Importers — parseOFX',
+    'OFX comes in two shapes: the older SGML dialect, where tags are opened and never closed, and ' +
+    'the XML dialect. Both are real, and banks ship both.',
+    function () {
+        function recs(text) { return recordsOf(parserFn('parseOFX')(text), 'parseOFX'); }
+
+        it('the SGML dialect with unclosed tags parses', function () {
+            const r = recs(OFX_SGML);
+            assertEqual(r.length, 2, 'two STMTTRN blocks');
+            assertClose(parseFloat(amountOf(r[0])), -4.50, 0.005);
+            assertClose(parseFloat(amountOf(r[1])), 2500.00, 0.005);
+        });
+
+        it('the XML dialect parses to the same records', function () {
+            const r = recs(OFX_XML);
+            assertEqual(r.length, 2);
+            assertClose(parseFloat(amountOf(r[0])), -4.50, 0.005);
+            assertClose(parseFloat(amountOf(r[1])), 2500.00, 0.005);
+            assertEqual(importedIdOf(r[0]), 'FIT-0001');
+        });
+
+        it('a debit stays negative and a credit stays positive', function () {
+            const r = recs(OFX_SGML);
+            assert(parseFloat(amountOf(r[0])) < 0, 'money out must be signed negative');
+            assert(parseFloat(amountOf(r[1])) > 0, 'money in must be signed positive');
+        });
+
+        it('DTPOSTED becomes an ISO date, with the time dropped', function () {
+            const r = recs(OFX_SGML);
+            assertEqual(dateOf(r[0]), '2026-01-05', '20260105120000 is the 5th, not the 4th or the 6th');
+            assertEqual(dateOf(r[1]), '2026-01-10', 'a bare DTPOSTED with no time still parses');
+        });
+
+        it('FITID becomes the importedId', function () {
+            const r = recs(OFX_SGML);
+            assertEqual(importedIdOf(r[0]), 'FIT-0001',
+                'the bank\'s own id is the only reliable way to know a row has been imported before');
+            assertEqual(importedIdOf(r[1]), 'FIT-0002');
+        });
+
+        it('NAME becomes the payee', function () {
+            const r = recs(OFX_SGML);
+            assertEqual(String(payeeOf(r[0])).trim(), 'COFFEE SHOP');
+            assertEqual(String(payeeOf(r[1])).trim(), 'ACME PAYROLL');
+        });
+
+        it('a sign-on block leaves no trace of the credentials in the output', function () {
+            const out = parserFn('parseOFX')(OFX_WITH_CREDENTIALS);
+            const dump = JSON.stringify(out);
+            assertEqual(dump.indexOf(OFX_USERID), -1,
+                'the USERID reached the parsed output. From there it is one save away from sitting in ' +
+                'localStorage, and one export away from being in a file the user emails to someone.');
+            assertEqual(dump.indexOf(OFX_USERPASS), -1, 'the USERPASS reached the parsed output.');
+            assertEqual(dump.toLowerCase().indexOf('userpass'), -1, 'even the field name should not survive');
+            assertEqual(recordsOf(out, 'parseOFX').length, 1, 'and the transaction still has to come through');
+        });
+
+        it('a file with no transactions parses to an empty list', function () {
+            assertEqual(recs('OFXHEADER:100\n\n<OFX><SIGNONMSGSRSV1></SIGNONMSGSRSV1></OFX>').length, 0);
+        });
+
+        it('something that is not OFX at all does not throw', function () {
+            assertEqual(recs('this is not a bank file').length, 0);
+            assertEqual(recs('').length, 0);
+        });
+    });
+
+describe('Importers — parseQIF',
+    'QIF is a line per field, terminated by a lone caret. The field codes are single letters, and ' +
+    'anything unrecognised has to be ignored rather than taken down with the record.',
+    function () {
+        function recs(text) { return recordsOf(parserFn('parseQIF')(text), 'parseQIF'); }
+
+        it('a caret terminates a record', function () {
+            assertEqual(recs(QIF_BANK).length, 2);
+        });
+
+        it('the !Type header is not a transaction', function () {
+            const r = recs(QIF_BANK);
+            assertEqual(r.length, 2, 'the header line must not become a third, empty record');
+            assertEqual(String(payeeOf(r[0])).indexOf('Type'), -1);
+        });
+
+        it('D, T and P map to date, amount and payee', function () {
+            const r = recs(QIF_BANK);
+            assertEqual(dateOf(r[0]), '2026-01-25', '25 cannot be a month, so this reading is the only one');
+            assertClose(parseFloat(amountOf(r[0])), -4.50, 0.005);
+            assertEqual(String(payeeOf(r[0])).trim(), 'Coffee Shop');
+        });
+
+        it('a thousands separator does not truncate the amount', function () {
+            assertClose(parseFloat(amountOf(recs(QIF_BANK)[1])), 2500, 0.005,
+                '"2,500.00" read naively becomes 2, and the user is told their salary was two pounds');
+        });
+
+        it('a record with no terminating caret at the end of file is still read', function () {
+            assertEqual(recs('!Type:Bank\nD01/25/2026\nT-4.50\nPCoffee Shop\n').length, 1,
+                'plenty of exports leave the last caret off');
+        });
+
+        it('an unknown field code does not discard the record', function () {
+            const r = recs('!Type:Bank\nD01/25/2026\nT-4.50\nPCoffee Shop\nZsomething-new\nXalso-unknown\n^\n');
+            assertEqual(r.length, 1);
+            assertClose(parseFloat(amountOf(r[0])), -4.50, 0.005);
+        });
+
+        it('an empty file parses to nothing', function () {
+            assertEqual(recs('').length, 0);
+            assertEqual(recs('!Type:Bank\n').length, 0);
+        });
+    });
+
+describe('Importers — date disambiguation',
+    'A column of 01/02/2026 is either the 1st of February or the 2nd of January, and guessing ' +
+    'wrong moves every transaction in the file by up to eleven months with nothing on screen to ' +
+    'show it happened. The column is read as a whole: one value that can only be read one way ' +
+    'settles it, and a column where nothing settles it has to say so.',
+    function () {
+        const CANDIDATES = ['analyseDateColumn', 'detectDateFormat', 'sniffDateFormat', 'inferDateFormat', 'detectDateOrder'];
+
+        // The verdict may come back as a token or as an object. Anything that is
+        // not clearly day-first or month-first counts as "would not guess".
+        function verdict(v) {
+            if (v == null) return 'ambiguous';
+            if (v.ambiguous === true || v.needsChoice === true) return 'ambiguous';
+            const s = String(typeof v === 'string' ? v : (v.order || v.format || v.kind || v.value || ''));
+            if (!s) return 'ambiguous';
+            if (/ambig|unknown|unsure|indeterminate/i.test(s)) return 'ambiguous';
+            if (/day.?first|^dmy$|dd?[\/\-. ]?mm/i.test(s)) return 'day';
+            if (/month.?first|^mdy$|mm?[\/\-. ]?dd/i.test(s)) return 'month';
+            if (/^exact$|ymd|iso/i.test(s)) return 'exact';
+            return 'unreadable: ' + show(v);
+        }
+
+        it('a column containing 13/01/2026 is day-first', function () {
+            const out = parserFn(CANDIDATES)(['05/01/2026', '13/01/2026', '21/02/2026']);
+            assertEqual(verdict(out), 'day',
+                'there is no thirteenth month, so the column can only be read one way — got ' + show(out));
+        });
+
+        it('a column containing 01/13/2026 is month-first', function () {
+            const out = parserFn(CANDIDATES)(['01/05/2026', '01/13/2026', '02/21/2026']);
+            assertEqual(verdict(out), 'month', 'got ' + show(out));
+        });
+
+        it('a genuinely ambiguous column is reported as ambiguous rather than guessed', function () {
+            const out = parserFn(CANDIDATES)(['01/02/2026', '03/04/2026', '05/06/2026']);
+            assertEqual(verdict(out), 'ambiguous',
+                'every value in this column reads both ways, so there is nothing in the file to decide it. ' +
+                'Picking one silently is the single worst thing an importer can do — got ' + show(out));
+        });
+
+        it('one unambiguous value settles a column that is otherwise ambiguous', function () {
+            const out = parserFn(CANDIDATES)(['01/02/2026', '03/04/2026', '25/12/2026']);
+            assertEqual(verdict(out), 'day', 'the 25th settles the whole column — got ' + show(out));
+        });
+
+        it('a column of ISO dates needs no guess at all', function () {
+            const v = verdict(parserFn(CANDIDATES)(['2026-01-05', '2026-02-06', '2026-03-07']));
+            assert(v === 'exact' || v === 'day' || v === 'month',
+                'a year-first column is unambiguous and must not be reported as needing a choice — got ' + v);
+        });
+
+        it('an empty column is ambiguous, not day-first by default', function () {
+            assertEqual(verdict(parserFn(CANDIDATES)([])), 'ambiguous');
+        });
+
+        it('a file whose dates cannot be settled refuses to import them', function () {
+            const out = parserFn('parseQIF')('!Type:Bank\nD02/03/2026\nT-4.50\nPCoffee Shop\n^\n');
+            assertEqual(recordsOf(out, 'parseQIF').length, 0,
+                'the only date in this file reads both ways. Importing it under a silent guess is worse ' +
+                'than importing nothing, because nothing on screen would ever show which way it went.');
+            assert(Array.isArray(out.errors) && out.errors.length > 0,
+                'and the user has to be told why the row did not come through');
+        });
+    });
+
+describe('Importers — the dedupe hash',
+    'A row without a FITID still has to be recognisable on a second import, so it gets an id ' +
+    'derived from its own content. Stable for the same row, different for a different one — ' +
+    'anything else either imports the same transaction twice or silently swallows a real one.',
+    function () {
+        const CANDIDATES = ['fallbackImportedId', 'importHash', 'dedupeHash', 'hashRecord', 'rowHash', 'makeImportedId'];
+        function idFor(accountId, date, amount, payee) {
+            return String(parserFn(CANDIDATES)(accountId, date, amount, payee));
+        }
+        const BASE = ['a1', '2026-01-05', -4.50, 'Coffee Shop'];
+        function base() { return idFor(BASE[0], BASE[1], BASE[2], BASE[3]); }
+
+        it('the same row hashes to the same id', function () {
+            const a = base();
+            assert(a && a.length > 0 && a !== 'undefined', 'the id is empty: ' + show(a));
+            assertEqual(base(), a, 'two identical rows must produce the same id, or every re-import duplicates');
+        });
+
+        it('a different amount changes the id', function () {
+            assert(idFor('a1', '2026-01-05', -4.51, 'Coffee Shop') !== base(),
+                'two coffees a penny apart on the same day would collapse into one, and the second would ' +
+                'be silently dropped as a duplicate');
+        });
+
+        it('a different date changes the id', function () {
+            assert(idFor('a1', '2026-01-06', -4.50, 'Coffee Shop') !== base(),
+                'the same standing order in two different months would collapse into one');
+        });
+
+        it('a different payee changes the id', function () {
+            assert(idFor('a1', '2026-01-05', -4.50, 'Tea Room') !== base(),
+                'two charges of 4.50 on the same day at different shops would collapse into one');
+        });
+
+        it('a different account changes the id', function () {
+            assert(idFor('a2', '2026-01-05', -4.50, 'Coffee Shop') !== base(),
+                'the same payment out of two accounts is two payments');
+        });
+
+        it('the same row hashes the same after a round trip through JSON', function () {
+            const row = JSON.parse(JSON.stringify({ accountId: 'a1', date: '2026-01-05', amount: -4.50, payee: 'Coffee Shop' }));
+            assertEqual(idFor(row.accountId, row.date, row.amount, row.payee), base(),
+                'the id must be of the content, not of the object it arrived in');
+        });
+
+        it('the string hasher underneath it is stable and spreads', function () {
+            const h = parserFn(['stableHash']);
+            assertEqual(String(h('cashflow compass')), String(h('cashflow compass')));
+            assert(String(h('cashflow compass')) !== String(h('cashflow compasr')),
+                'a one-character change must move the hash');
+            assert(String(h('')).length > 0, 'even an empty string needs an id');
+        });
+    });
+
 /* ───── Constraint guard (SEC-10) ───── */
 
 const SOURCE_CACHE = {};
@@ -1859,12 +3646,27 @@ function collect(text, re) {
     return out;
 }
 
-describe('Constraint guard — nothing may leave the machine',
-    'These read engine.js, app.js and index.html as text and check the promise directly, so it ' +
-    'outlives anyone\'s memory of having made it. Only runs over http(s): file:// blocks the reads.',
-    function () {
-        const APP_FILES = ['engine.js', 'app.js', 'index.html'];
+// The three wave-2 files are scanned like the rest, but a missing one is a skip
+// rather than a failure: whether they exist yet is not what this section is about.
+const CORE_FILES = ['engine.js', 'app.js', 'index.html'];
+const WAVE2_FILES = ['features.js', 'importers.js', 'portability.js'];
+const SCANNED_FILES = CORE_FILES.concat(WAVE2_FILES);
 
+async function sourceOrSkip(file) {
+    try {
+        return await source(file);
+    } catch (e) {
+        if (WAVE2_FILES.indexOf(file) !== -1) {
+            skip(file + ' is not being served here (' + e.message + ') — there is nothing to scan');
+        }
+        throw e;
+    }
+}
+
+describe('Constraint guard — nothing may leave the machine',
+    'These read the app\'s own files as text and check the promise directly, so it outlives ' +
+    'anyone\'s memory of having made it. Only runs over http(s): file:// blocks the reads.',
+    function () {
         // Only the anchors a human clicks. Nothing here loads a resource.
         const ALLOWED_LINKS = [
             'https://observation-deck.netlify.app/',
@@ -1872,30 +3674,71 @@ describe('Constraint guard — nothing may leave the machine',
         ];
 
         const NETWORK_APIS = [
-            { name: 'fetch(',           re: /\bfetch\s*\(/ },
-            { name: 'XMLHttpRequest',   re: /\bXMLHttpRequest\b/ },
-            { name: 'WebSocket',        re: /\bWebSocket\b/ },
-            { name: 'sendBeacon',       re: /\bsendBeacon\b/ },
-            { name: 'EventSource',      re: /\bEventSource\b/ },
-            { name: 'RTCPeerConnection', re: /\bRTCPeerConnection\b/ }
+            { name: 'fetch(',            re: /\bfetch\s*\(/ },
+            { name: 'XMLHttpRequest',    re: /\bXMLHttpRequest\b/ },
+            { name: 'WebSocket',         re: /\bWebSocket\b/ },
+            { name: 'sendBeacon',        re: /\bsendBeacon\b/ },
+            { name: 'EventSource',       re: /\bEventSource\b/ },
+            { name: 'RTCPeerConnection', re: /\bRTCPeerConnection\b/ },
+            { name: 'importScripts',     re: /\bimportScripts\s*\(/ }
         ];
 
-        APP_FILES.forEach(function (file) {
+        // Reading a file the user picked, parsing it, and hashing it are all local
+        // operations. Nothing here can address another machine, and the guard has
+        // to keep letting them through or the import and export features cannot be
+        // written at all.
+        const LOCAL_APIS = [
+            'const handle = await window.showSaveFilePicker({ suggestedName: "compass-backup.json" });',
+            'const [picked] = await window.showOpenFilePicker({ multiple: false });',
+            'const writable = await handle.createWritable();',
+            'const digest = await crypto.subtle.digest("SHA-256", bytes);',
+            'const doc = new DOMParser().parseFromString(text, "application/xml");',
+            'const reader = new FileReader(); reader.readAsText(file, "utf-8");',
+            'const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));',
+            'const buf = await file.arrayBuffer();'
+        ].join('\n');
+
+        function networkHits(text) {
+            const hits = [];
+            NETWORK_APIS.forEach(function (api) {
+                scanLines(text, api.re).forEach(function (h) { hits.push(api.name + ' — ' + h); });
+            });
+            return hits;
+        }
+
+        it('the guard catches a real network call', function () {
+            const hits = networkHits([
+                'fetch("https://example.invalid/collect", { method: "POST" });',
+                'const x = new XMLHttpRequest();',
+                'const s = new WebSocket("wss://example.invalid/");',
+                'navigator.sendBeacon("/collect", payload);',
+                'const es = new EventSource("/stream");',
+                'const pc = new RTCPeerConnection();',
+                'importScripts("https://example.invalid/lib.js");'
+            ].join('\n'));
+            assertEqual(hits.length, 7,
+                'a guard that cannot fail proves nothing — it should have found all seven, found ' + hits.length);
+        });
+
+        it('the guard allows the local file, parser and crypto APIs', function () {
+            const hits = networkHits(LOCAL_APIS);
+            assertEqual(hits.length, 0,
+                'reading a file the user picked, parsing it with DOMParser and hashing it with crypto.subtle ' +
+                'are all local. Flagging them would make the import and export features unwritable: ' + hits.join('; '));
+        });
+
+        SCANNED_FILES.forEach(function (file) {
             it(file + ' calls no network API', async function () {
                 requireHttp();
-                const text = await source(file);
-                const hits = [];
-                NETWORK_APIS.forEach(function (api) {
-                    scanLines(text, api.re).forEach(function (h) { hits.push(api.name + ' — ' + h); });
-                });
+                const hits = networkHits(await sourceOrSkip(file));
                 assertEqual(hits.length, 0, file + ' reaches for the network:\n  ' + hits.join('\n  '));
             });
         });
 
-        APP_FILES.forEach(function (file) {
+        SCANNED_FILES.forEach(function (file) {
             it(file + ' loads no external resource', async function () {
                 requireHttp();
-                const text = await source(file);
+                const text = await sourceOrSkip(file);
                 const srcs = collect(text, /\bsrc\s*=\s*["']?(https?:\/\/[^"'\s>]+)/gi);
                 assertEqual(srcs.length, 0, file + ' pulls in something from another origin: ' + srcs.join(', '));
                 const cssUrls = collect(text, /url\(\s*["']?(https?:\/\/[^"')\s]+)/gi)
@@ -1904,14 +3747,29 @@ describe('Constraint guard — nothing may leave the machine',
             });
         });
 
-        APP_FILES.forEach(function (file) {
+        SCANNED_FILES.forEach(function (file) {
             it(file + ' links out only to documented destinations', async function () {
                 requireHttp();
-                const text = await source(file);
+                const text = await sourceOrSkip(file);
                 const stray = collect(text, /\bhref\s*=\s*["']?(https?:\/\/[^"'\s>]+)/gi).filter(function (u) {
                     return !ALLOWED_LINKS.some(function (ok) { return u.indexOf(ok) === 0; });
                 });
                 assertEqual(stray.length, 0, file + ' links to an undocumented external address: ' + stray.join(', '));
+            });
+        });
+
+        WAVE2_FILES.forEach(function (file) {
+            it(file + ' names no bank-linking service', async function () {
+                requireHttp();
+                const text = await sourceOrSkip(file);
+                // Vendor hostnames only. The words themselves are allowed to appear
+                // in a comment saying the app will never use one.
+                const hits = collect(text,
+                    /["'`](?:https?:\/\/)?(?:[a-z0-9.-]*\.)?(plaid\.com|simplefin\.org|gocardless\.com|truelayer\.com|yodlee\.com|finicity\.com|akoya\.com|mx\.com)[^"'`]*["'`]/gi);
+                assertEqual(hits.length, 0,
+                    file + ' addresses an account-aggregation service: ' + hits.join(', ') +
+                    '. Importing a file the user downloaded themselves is the only way this app is ever ' +
+                    'allowed to see bank data.');
             });
         });
 

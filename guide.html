@@ -484,13 +484,22 @@ a.kicker:hover { color: var(--accent); }
     <ol>
         <li><a href="#what-is">What is Cashflow Compass?</a></li>
         <li><a href="#first-10">Your First 10 Minutes</a></li>
-        <li><a href="#accounts">Accounts</a></li>
+        <li><a href="#accounts">Accounts, Transfers &amp; Credit Cards</a></li>
         <li><a href="#categories">Categories</a></li>
         <li><a href="#transactions">Transactions &amp; Frequencies</a></li>
         <li><a href="#forecast">The Forecast Grid</a></li>
         <li><a href="#charts">Charts</a></li>
         <li><a href="#insights">Insight Cards</a></li>
-        <li><a href="#export">Excel &amp; JSON Export / Import</a></li>
+        <li><a href="#checkins">Balance Check-ins</a></li>
+        <li><a href="#import-actuals">Importing Your Bank's File</a></li>
+        <li><a href="#plan-vs-actual">Plan vs Actual</a></li>
+        <li><a href="#bands">Confidence Bands</a></li>
+        <li><a href="#debt">The Debt Payoff Planner</a></li>
+        <li><a href="#goals">Goals &amp; Sinking Funds</a></li>
+        <li><a href="#calendar">The Bills Calendar</a></li>
+        <li><a href="#scenarios">Scenarios</a></li>
+        <li><a href="#export">Export, Import &amp; Backup</a></li>
+        <li><a href="#live-workbook">Live Workbook Mode</a></li>
         <li><a href="#settings">Settings &amp; Housekeeping</a></li>
         <li><a href="#tips">Pro Tips</a></li>
     </ol>
@@ -506,6 +515,10 @@ a.kicker:hover { color: var(--accent); }
 
     <p>Unlike a spreadsheet you maintain manually, the app models every recurring transaction — your bi-weekly paycheck, monthly rent, annual insurance renewal — and projects them forward automatically. You set things up once and the forecast, charts, and insights update in real time.</p>
 
+    <p>It also checks that forecast against reality, on your terms. You can <a href="#checkins">record what an account actually holds</a> today and see how far the projection has drifted, and you can <a href="#import-actuals">open a transaction file you downloaded from your own bank</a> and compare what you planned with what really happened. That is the full extent of its contact with the outside world — there is no connection to any institution, and there never will be.</p>
+
+    <p>Everything in it is free, permanently. There is no paid tier, no subscription, no locked feature and nothing to buy — there's no service behind the app to sell you.</p>
+
     <div class="callout note">
         <div class="callout-label">How it works</div>
         All data is stored in your browser's LocalStorage, and the app makes no network requests at all — no server, no analytics, no third-party service. The two libraries it uses (Chart.js for the charts, SheetJS for the Excel round-trip) ship inside the <code>vendor/</code> folder rather than loading from a CDN, so the whole thing works offline: open <code>index.html</code> straight from disk, on a plane, with the Wi-Fi off, and everything still runs. You can export the full state to an Excel workbook or JSON file at any time as a portable backup, and re-import it later to pick up exactly where you left off.
@@ -515,14 +528,21 @@ a.kicker:hover { color: var(--accent); }
     <ul>
         <li>Seeing whether your monthly net cash flow is positive or negative before it becomes a problem</li>
         <li>Planning for irregular windfalls — like the two extra "3-paycheck months" you get with bi-weekly pay</li>
-        <li>Stress-testing scenarios: what happens if rent goes up 5% at renewal? What if you cut dining out?</li>
+        <li>Stress-testing <a href="#scenarios">scenarios</a>: what happens if rent goes up 5% at renewal? What if you take the new job? What if you cut dining out?</li>
+        <li>Finding out whether your plan matches your actual spending, and <a href="#plan-vs-actual">retuning the plan</a> when it doesn't</li>
+        <li>Working out what a credit card really costs you, and <a href="#debt">which payoff order clears it soonest</a></li>
         <li>Building a backup budget you can open in Excel, edit, and re-import</li>
     </ul>
 
-    <h3>What it doesn't do (yet)</h3>
+    <h3>What it doesn't do</h3>
     <ul>
-        <li>Track actual spending vs. budget — this is a forward-looking planner, not a transaction tracker</li>
-        <li>Read a statement file you've downloaded from your bank yourself (CSV / OFX) — planned, not built yet</li>
+        <li><strong>Connect to any financial institution.</strong> Permanent, and the next heading explains why</li>
+        <li><strong>Convert currencies.</strong> The currency setting changes formatting only — <code>$1,000</code> becomes <code>€1,000</code>, never today's exchange rate</li>
+        <li><strong>Calculate your tax.</strong> You enter tax as an expense like anything else; the app has no idea what you owe</li>
+        <li><strong>Model investment returns.</strong> An investment account is a number you typed in that counts toward net worth. It does not grow on its own</li>
+        <li><strong>Amortize a loan.</strong> Credit cards accrue interest at their APR, but a mortgage or car loan is modelled as a payment you type in, not as a principal/interest schedule</li>
+        <li><strong>Give financial advice.</strong> Every number it shows you is arithmetic on the numbers you entered. It has no opinion about what you should do</li>
+        <li><strong>Sync by itself, or back itself up.</strong> Your data is in this browser. Exporting — or <a href="#live-workbook">connecting a file in a synced folder</a> — is what moves it and what saves it</li>
     </ul>
 
     <h3>What it will never do: link to your bank</h3>
@@ -532,7 +552,7 @@ a.kicker:hover { color: var(--accent); }
         <li><strong>Nothing to trust.</strong> Bank linking means handing credentials — or a long-lived token — to a middleman. A planning tool doesn't need that level of access to do its job, so it doesn't ask for it.</li>
         <li><strong>Nothing to break.</strong> Aggregator connections rot: banks change their APIs, tokens expire, an institution drops off the supported list, and the tool that depended on it quietly stops being accurate. Typed-in numbers keep working forever.</li>
     </ul>
-    <p>Opening a file <strong>you</strong> downloaded from your own bank is a completely different thing — no credentials, no third party, no live connection — and that <em>is</em> on the roadmap.</p>
+    <p>Opening a file <strong>you</strong> downloaded from your own bank is a completely different thing — no credentials, no third party, no live connection, nothing transmitted — and that is <a href="#import-actuals">built and described in section 10</a>. You download the file; you open it; the app reads it off your disk. Nobody is contacted at any point.</p>
 </section>
 
 <!-- ─────────────────────────────────────────── -->
@@ -583,17 +603,27 @@ a.kicker:hover { color: var(--accent); }
 
     <div class="callout tip">
         <div class="callout-label">Tip — Start with the sample data</div>
-        If the app is empty, the welcome banner offers a <strong>Load sample data</strong> button. It sets up two accounts and 13 realistic transactions so you can see the full forecast immediately. Edit or delete any transaction to replace it with your own numbers.
+        The <strong>Load sample data</strong> button in the header (and in the welcome banner while the app is empty) sets up two accounts and 13 realistic transactions so you can see the full forecast immediately. Edit or delete any transaction to replace it with your own numbers.
     </div>
+
+    <h3>The second ten minutes</h3>
+    <p>Those five steps give you a plan. Sections 9 to 16 are about finding out whether the plan is <em>true</em>, and they're worth coming back to once the basics are entered:</p>
+    <ul>
+        <li><strong><a href="#checkins">Check in a balance</a></strong> in a week's time and see how far the forecast has drifted from your real account.</li>
+        <li><strong><a href="#import-actuals">Import a few months of transactions</a></strong> from a file you download from your bank, then read <a href="#plan-vs-actual">Plan vs Actual</a> to find the categories where your plan and your habits disagree.</li>
+        <li><strong><a href="#scenarios">Build a scenario</a></strong> before a big decision, so "can we afford this?" has a number attached.</li>
+    </ul>
 </section>
 
 <!-- ─────────────────────────────────────────── -->
 <!-- 3. Accounts -->
 <!-- ─────────────────────────────────────────── -->
 <section class="guide-section" id="accounts">
-    <h2><span class="section-num">3</span> Accounts</h2>
+    <h2><span class="section-num">3</span> Accounts, Transfers &amp; Credit Cards</h2>
 
     <p>Accounts hold the balances the forecast builds from. Each account carries its own starting balance and the date that balance was true, and the forecast tracks them <em>separately</em> — every transaction is assigned to an account, so money leaves and lands where it really would.</p>
+
+    <p>That per-account tracking is what makes the projection useful rather than merely tidy. A single combined balance can look healthy all year while the checking account it's mostly made of goes to zero in March. Because each account is projected on its own you can see that coming: the <strong>Balances by Account</strong> section walks each account forward month by month alongside the combined totals.</p>
 
     <p>Two different totals come out of that. <strong>Net worth</strong> is everything you own minus what you owe. <strong>Liquid cash</strong> is only the money you could actually spend this week — and it's the liquid figure the red-balance warnings watch, so a healthy brokerage account can't paper over a checking account that runs dry.</p>
 
@@ -615,27 +645,57 @@ a.kicker:hover { color: var(--accent); }
 
     <div class="callout tip">
         <div class="callout-label">Tip — Keep the as-of dates honest</div>
-        When you refresh a balance, update its as-of date at the same time. If the balance is new but the date is old, the forecast will re-apply everything that has happened since — and your projection will drift low.
+        When you refresh a balance, update its as-of date at the same time. If the balance is new but the date is old, the forecast will re-apply everything that has happened since — and your projection will drift low. <a href="#checkins">Balance check-ins</a> are the tidier way to do this: record what the account really holds, see the drift, and re-anchor in one step.
     </div>
 
     <h3>Transfers — moving money between accounts</h3>
     <p>Add as many accounts as you like; the forecast keeps a running balance for each one plus the combined totals. To move money between them, add a transaction with the kind set to <strong>Transfer</strong> and pick both ends: the account it comes <em>from</em> and the account it goes <em>to</em>.</p>
     <p>A transfer is neither income nor an expense, so it never changes your net cash flow or your net worth — it changes only <em>where</em> the money sits. A $500 monthly transfer from checking to savings shows your checking balance growing more slowly and your savings balance climbing, which is exactly what happens in real life.</p>
 
-    <h3>Credit cards, interest, and card payments</h3>
-    <p>Cards work like real cards, which takes a moment to get used to:</p>
+    <h3>Credit cards — the one part worth reading twice</h3>
+    <p>Cards behave the way real cards do, and that catches almost everyone out at first. Two sentences carry the whole idea:</p>
     <ul>
-        <li><strong>Spending on the card</strong> — record the expense against the credit account. It <em>increases</em> the card's balance rather than reducing your cash. Nothing leaves checking, because nothing has yet.</li>
-        <li><strong>Paying the card</strong> — this is a <strong>transfer</strong>, from the cash account you pay out of to the credit account. That's the point where cash actually leaves your checking and the card balance comes down. If you've recorded the purchases too, logging the payment as an expense as well would count the same money twice: once when you swiped, once when you paid.</li>
-        <li><strong>Interest</strong> — set the card's <strong>APR</strong> and the balance accrues interest month by month instead of sitting frozen, so carrying a balance costs you something in the forecast the way it does in life.</li>
-        <li><strong>Minimum payment</strong> — record the smallest payment the issuer accepts, so it's visible how much of what you pay each month is genuinely reducing the balance rather than covering interest.</li>
+        <li><strong>An expense charged to a card raises the card's balance.</strong> Record it as an ordinary expense with the <em>card</em> as its account. No cash leaves your checking, because in real life none has yet — you owe more instead.</li>
+        <li><strong>A payment to a card is a transfer</strong>, from the cash account you pay out of to the card. That's the moment cash actually leaves checking and the card balance comes down.</li>
     </ul>
-    <p>With an APR and a minimum payment recorded on each card, the app can also project a <strong>payoff schedule</strong>: when each card clears and what the interest will have cost you by then. It pays the highest-APR card down first — the avalanche method, which is the cheapest order mathematically — with every card still receiving its minimum each month.</p>
+
+    <h3>Worked example</h3>
+    <p>You have <strong>$3,000</strong> in checking and a Visa with <strong>$1,200 owed</strong> at 22% APR. Your net worth is $3,000 − $1,200 = <strong>$1,800</strong>. Now play out a month:</p>
+
+    <table class="guide-table">
+        <thead>
+            <tr><th>What happens</th><th>How you record it</th><th>Checking</th><th>Visa owed</th><th>Net worth</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>Starting point</td><td>—</td><td>$3,000</td><td>$1,200</td><td>$1,800</td></tr>
+            <tr><td>$400 of groceries, paid with the Visa</td><td><strong>Expense</strong>, account = Visa</td><td>$3,000</td><td>$1,600</td><td>$1,400</td></tr>
+            <tr><td>A month's interest at 22% APR on $1,600</td><td>automatic, from the card's APR</td><td>$3,000</td><td>$1,629</td><td>$1,371</td></tr>
+            <tr><td>You pay the card $500 from checking</td><td><strong>Transfer</strong>, Checking → Visa</td><td>$2,500</td><td>$1,129</td><td>$1,371</td></tr>
+        </tbody>
+    </table>
+
+    <p>Read the last two columns together and the model explains itself:</p>
+    <ul>
+        <li><strong>The groceries cost you $400 the moment you swiped.</strong> Net worth fell by $400 even though your cash didn't move — which is exactly what happened in reality. The bill was real; you just hadn't settled it yet.</li>
+        <li><strong>The payment cost you nothing.</strong> Net worth is the same on both sides of it: $1,371 before, $1,371 after. You moved $500 out of checking and $500 off a debt you already owed, and the two cancel. Liquid cash fell, because that part is real — but you did not become poorer by paying your bill.</li>
+        <li><strong>The interest is the only thing the card added.</strong> $29 of net worth that simply evaporated, which is the honest cost of carrying the balance.</li>
+    </ul>
+
+    <p>So a card payment is a <em>transfer</em>, not an expense. If you record the groceries <em>and</em> log the $500 payment as an expense, you have charged yourself for the same groceries twice, and your forecast is $500 a month gloomier than your life.</p>
 
     <div class="callout warn">
-        <div class="callout-label">Watch out — Don't model the same money twice</div>
-        Pick one lane per card. Either record the individual purchases against the card and pay it down with transfers, or skip the purchase detail and just model the monthly payment. Doing both charges you twice for the same spending and makes the forecast look far worse than reality.
+        <div class="callout-label">Watch out — Pick one lane per card and stay in it</div>
+        <p><strong>Detailed:</strong> record purchases against the card and pay it down with transfers. The card balance moves, interest is modelled, and the <a href="#debt">payoff planner</a> works. Use this if you carry a balance.</p>
+        <p><strong>Simple:</strong> don't record card purchases at all — just model the monthly payment as an expense in a Debt category. Quick to set up, but the card balance never moves and no interest is modelled. Fine if you clear the card in full every month.</p>
+        <p>What you must not do is both. That double-counts every purchase.</p>
     </div>
+
+    <h3>APR and minimum payment</h3>
+    <ul>
+        <li><strong>APR</strong> — set it and the balance accrues interest month by month instead of sitting frozen, so carrying a balance costs you something in the forecast the way it does in life. Interest is charged on the outstanding balance each month at APR ÷ 12: 22% on $1,600 is about $29.</li>
+        <li><strong>Minimum payment</strong> — the smallest payment the issuer accepts. It's what makes the difference visible between a payment that's genuinely reducing the balance and one that's mostly covering interest.</li>
+    </ul>
+    <p>With both recorded on each card, the <a href="#debt">Debt Payoff Planner</a> can project when every card clears, what the interest costs, and how much a different payoff order would save you.</p>
 </section>
 
 <!-- ─────────────────────────────────────────── -->
@@ -646,7 +706,7 @@ a.kicker:hover { color: var(--accent); }
 
     <p>Every transaction belongs to a category, and every category belongs to a <strong>kind</strong>. The category is the label you read; the kind is what the app reasons with — it decides which group a row lands in on the forecast grid, and it separates committed costs from the ones you actually control.</p>
 
-    <p>The app ships with <strong>18 default categories</strong> covering the usual shape of a household budget: Salary and Other Income; Housing, Utilities, Home Internet, Phone Bill, Insurance and Subscriptions; Electric, Groceries and Gas / Transport; Dining, Entertainment and Shopping; Savings and Retirement; Debt Payment; and Taxes. Keep the ones that fit, rename the ones that don't, add your own.</p>
+    <p>The app ships with <strong>19 default categories</strong> covering the usual shape of a household budget: Salary and Other Income; Housing, Utilities, Home Internet, Phone Bill, Insurance and Subscriptions; Electric, Groceries and Gas / Transport; Dining, Entertainment and Shopping; Savings and Retirement; Debt Payment; Taxes; and a Savings Goal to start you off on the Goal kind. Keep the ones that fit, rename the ones that don't, add your own.</p>
 
     <h3>The eight kinds</h3>
     <table class="guide-table">
@@ -661,7 +721,7 @@ a.kicker:hover { color: var(--accent); }
             <tr><td><strong>Savings</strong></td><td>Money you're deliberately setting aside — emergency fund, retirement contributions</td></tr>
             <tr><td><strong>Debt</strong></td><td>Loan and credit card payments</td></tr>
             <tr><td><strong>Tax</strong></td><td>Estimated payments, self-employment tax, anything owed to the revenue service</td></tr>
-            <tr><td><strong>Goal</strong></td><td>A specific target you're funding — a car deposit, a wedding, a trip. No default category uses this kind; create your own when you have something to save toward</td></tr>
+            <tr><td><strong>Goal</strong></td><td>A specific target you're funding — a car deposit, a wedding, a trip. A <em>Savings Goal</em> category ships as a starting point; rename it or add your own per goal. Goal categories can carry a target amount and a target date, which is what turns them into <a href="#goals">tracked goals with an ETA</a></td></tr>
         </tbody>
     </table>
 
@@ -834,7 +894,7 @@ a.kicker:hover { color: var(--accent); }
         </div>
         <div class="chart-desc-card">
             <div class="chart-name">📈 Running Balance</div>
-            <p>Area chart of your projected account balance month by month. Shows the trajectory of your financial position — are you building a cushion or drawing one down?</p>
+            <p>Area chart of your projected account balance month by month. Shows the trajectory of your financial position — are you building a cushion or drawing one down? Once you've imported enough real history, it can also draw <a href="#bands">confidence bands</a> around the line.</p>
             <div class="chart-action">Look for: dips toward or below zero</div>
         </div>
         <div class="chart-desc-card">
@@ -969,10 +1029,359 @@ a.kicker:hover { color: var(--accent); }
 </section>
 
 <!-- ─────────────────────────────────────────── -->
-<!-- 9. Excel & JSON Export / Import -->
+<!-- 9. Balance Check-ins -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="checkins">
+    <h2><span class="section-num">9</span> Balance Check-ins</h2>
+
+    <p>A forecast built from a balance you typed in three weeks ago has a hole in it. Life happened in between: a refund arrived, a bill was larger than you remembered, you forgot to enter the vet bill. The projection is still running off the old number and quietly getting further from the truth.</p>
+
+    <p>A <strong>check-in</strong> closes that gap in about ten seconds. In the <strong>Monthly Check-in</strong> section, pick an account, type what it holds right now, confirm the date, and press <strong>Log check-in</strong>. That's the whole interaction — no import, no file, no connection.</p>
+
+    <h3>What the drift number tells you</h3>
+    <p>The panel then leads with the number it exists for: the <strong>drift</strong>. It shows what the forecast said you'd have on that date, what you actually had, and the gap between them — as money and as a percentage of the projection — with a per-account table underneath giving the same three figures for each account you've checked in.</p>
+
+    <table class="guide-table">
+        <thead>
+            <tr><th>What you see</th><th>What it usually means</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>Drift near zero</strong></td><td>Your plan matches your life. Nothing to do — this is the result you're after</td></tr>
+            <tr><td><strong>Actual consistently <em>below</em> forecast</strong></td><td>Something real is missing from the plan, or an amount is too low. Spending that never got entered is the usual culprit</td></tr>
+            <tr><td><strong>Actual consistently <em>above</em> forecast</strong></td><td>You're planning for spending that isn't happening, or income you forgot to record. Pleasant, but it still makes the forecast wrong</td></tr>
+            <tr><td><strong>A single large one-off gap</strong></td><td>One event, not a pattern — a bonus, a big repair, a bill that landed in a different month than planned</td></tr>
+        </tbody>
+    </table>
+
+    <p>Drift is a measurement, not a verdict. It doesn't say you overspent; it says the model and the world disagree, and points at where.</p>
+
+    <h3>Re-anchoring the forecast</h3>
+    <p>A check-in <em>measures</em> the gap; it doesn't silently rewrite your accounts. When the drift is real rather than a rounding wobble, close it yourself in two fields: open the account in the <a href="#accounts">Accounts</a> panel, set its starting balance to what you observed, and set its as-of date to the day you observed it. Everything from that date forward is then projected from a number you have actually looked at, rather than one you typed in weeks ago and have been compounding ever since.</p>
+    <p>Re-anchoring fixes the <em>level</em> of the forecast, not its <em>shape</em>. If the same drift reappears at the next check-in, the plan itself is missing something — that's the point to go looking for the transaction you never entered, or to <a href="#import-actuals">import a few months of real transactions</a> and let <a href="#plan-vs-actual">Plan vs Actual</a> tell you which category it lives in.</p>
+
+    <div class="callout tip">
+        <div class="callout-label">Tip — Check in on a rhythm, not on a whim</div>
+        Once a week, or on payday, is plenty. Every check-in is kept, so the list becomes a record of whether your plan is getting more accurate or less — which is far more useful than any single reading. Only the <strong>most recent</strong> check-in per account is used to compute the drift, deliberately: averaging an old reading with a fresh one would blunt exactly the signal you're looking for.
+    </div>
+
+    <div class="callout note">
+        <div class="callout-label">Note — Check in on credit cards too</div>
+        For a card, "what it holds" is what you <em>owe</em>, entered as a positive number, exactly as you entered its starting balance. Card drift is usually the most informative kind: it's where unrecorded spending shows up first. In the combined total, a card is counted the way net worth counts it — as a debt against the pile, not as money in it — so a card and a current account can't quietly cancel each other out to a meaningless zero.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 10. Importing Your Bank's File -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="import-actuals">
+    <h2><span class="section-num">10</span> Importing Your Bank's File</h2>
+
+    <p>Nearly every bank lets you download your own transactions — usually a button marked <em>Export</em>, <em>Download</em>, or <em>Statement</em> somewhere near the transaction list. Cashflow Compass reads that file. You get your real spending sitting next to your plan, without typing a single line of it in.</p>
+
+    <div class="callout warn">
+        <div class="callout-label">Read this first — this is not a bank connection</div>
+        <p>Importing a file is the opposite of linking an account, and the difference is worth being precise about:</p>
+        <ul>
+            <li><strong>No credentials.</strong> The app never asks for a username, password, PIN, security question or one-time code. There is no login form anywhere in it.</li>
+            <li><strong>No aggregator.</strong> No Plaid, no SimpleFIN, no GoCardless, no open banking, no OAuth to any institution, no third-party service of any kind.</li>
+            <li><strong>Nothing is uploaded.</strong> The app makes no network requests at all. You pick a file with a file picker; the browser reads it from your disk; the parsing happens in the page. Nothing is sent anywhere, because there is nowhere for it to be sent.</li>
+            <li><strong>Credentials inside the file are thrown away.</strong> OFX and QFX downloads often still carry the sign-on block the request was built from — <code>USERID</code>, <code>USERPASS</code>, session keys, the lot. The parser <strong>strips that whole block before it reads anything</strong>, and then keeps only the transaction fields it explicitly recognises: date, amount, payee, id, memo, type. Nothing else survives the parse, so those values are never stored in your data, never written into an export, and never shown on screen.</li>
+        </ul>
+        <p>You downloaded a file, and you opened it. That's all that happened.</p>
+    </div>
+
+    <h3>Formats it reads</h3>
+    <table class="guide-table">
+        <thead>
+            <tr><th>Format</th><th>Where you'll meet it</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>CSV</strong></td><td>The universal fallback — nearly every bank offers it. Column layouts vary wildly, which is what the mapping wizard is for</td></tr>
+            <tr><td><strong>OFX / QFX</strong></td><td>The "download for Quicken / Money" option. Structured, and usually carries a unique id per transaction, which makes duplicate detection exact</td></tr>
+            <tr><td><strong>QIF</strong></td><td>The older Quicken format. Still offered by plenty of banks and by most personal-finance software as an export</td></tr>
+            <tr><td><strong>camt.053</strong></td><td>The ISO 20022 XML bank statement, common in Europe and for business accounts</td></tr>
+        </tbody>
+    </table>
+
+    <h3>The four steps</h3>
+    <p>Importing walks through four screens, and <strong>nothing is written to your data until you confirm the last one</strong>. You can back out at any point.</p>
+
+    <table class="guide-table">
+        <thead>
+            <tr><th>Step</th><th>What happens</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>1 · Which account is this?</strong></td><td>Which of your accounts the file belongs to. If a saved column layout exists for that account, it says so here</td></tr>
+            <tr><td><strong>2 · Does this look like your statement?</strong></td><td>A preview of the parsed rows. If the file is wrong, or the parse has gone sideways, you find out before anything is added</td></tr>
+            <tr><td><strong>3 · Point the columns at the right fields</strong></td><td>The mapping step, for CSV. Structured formats say "there is nothing to line up here" and skip straight past it</td></tr>
+            <tr><td><strong>4 · Check what is about to be added</strong></td><td>The review: what's new, what's already recorded, what might be a duplicate, and anything that couldn't be read</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Mapping the columns (CSV only)</h3>
+    <p>OFX, QFX, QIF and camt.053 name their own fields — the app knows where the date is. CSV doesn't: one bank exports <code>Date, Description, Amount</code>, another <code>Posted, Payee, Debit, Credit, Balance</code>. So step 3 asks you to point at them:</p>
+
+    <table class="guide-table">
+        <thead>
+            <tr><th>You choose</th><th>What it does</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>Date column</strong></td><td>Which column holds the transaction date</td></tr>
+            <tr><td><strong>Payee / description column</strong></td><td>Which column names the merchant</td></tr>
+            <tr><td><strong>How the amount is written</strong></td><td>Either <em>one column, already signed</em> (money out negative), or <em>separate money-out and money-in columns</em> — the split layout common in UK and European exports</td></tr>
+            <tr><td><strong>Flip the sign</strong></td><td>Turn on if your bank writes money out as a positive number. Available for the structured formats too, for the occasional bank that does this in OFX</td></tr>
+            <tr><td><strong>Date format</strong></td><td>Which way round the day and month are — see below</td></tr>
+        </tbody>
+    </table>
+
+    <p>The layout is <strong>remembered per account</strong>. Next month's export from the same bank arrives with the mapping already applied and a note saying so — change anything that's different, or just carry on. If the bank changes its format, you remap once and that becomes the saved layout.</p>
+
+    <h3>Ambiguous dates are asked about, never guessed</h3>
+    <p>A column full of values like <code>03/04/2026</code> is genuinely ambiguous: April 3rd to a British bank, March 4th to an American one. Guessing would be both catastrophic and invisible — every transaction would land in the wrong month, the comparison against your plan would be quietly nonsense, and nothing on screen would look broken.</p>
+    <p>So the app asks, and shows its working: it tells you which reading the file's own values support (a day above 12 anywhere in the column settles it), and offers the choice as <em>Day first — 03/04/2026 is 3 April 2026</em> against <em>Month first — 03/04/2026 is 4 March 2026</em>. Unambiguous files — ISO <code>2026-04-03</code>, or a column that can only be read one way — don't interrupt you. A column with evidence for <em>both</em> readings is flagged as inconsistent, because that's a fact about the file you'd want to know.</p>
+
+    <h3>Duplicates</h3>
+    <p>Overlapping imports are normal: you download "last 90 days" every month, so two-thirds of every file is already in your records. The review step sorts that out for you, in three piles:</p>
+    <ul>
+        <li><strong>New</strong> — imported. Rows carrying a unique bank id (the <code>FITID</code> in OFX, QFX and QIF) are keyed on it exactly; rows without one, which means most CSVs, get a stable fingerprint built from the date, amount and payee.</li>
+        <li><strong>Already imported</strong> — recognised and left alone. An import that adds nothing reports as a clean no-op, not a failure.</li>
+        <li><strong>Possible duplicates</strong> — same amount, within three days of something already recorded. These are <em>your</em> call, with a tickbox each: two identical $40 fuel stops in one week are perfectly normal, and so is the same transaction appearing twice in overlapping exports. The app won't guess which.</li>
+    </ul>
+
+    <h3>Categories, and what it won't invent</h3>
+    <p>New rows arrive with a category suggested from what you've already filed — if you've categorised "SAFEWAY" as Groceries before, the next one follows. Anything it can't recognise is left <strong>uncategorised rather than guessed at</strong>, and the review screen tells you how many of each. The first rows are editable right there before you commit, and everything is editable afterwards.</p>
+    <p>If the file's currency differs from the one you budget in, you're told — and the numbers are imported exactly as written, with no conversion. The app never invents an exchange rate.</p>
+
+    <h3>Matching actuals to your plan</h3>
+    <p>Imported rows are matched against your planned transactions inside a date window, because reality is never punctual: the rent you planned for the 1st cleared on the 3rd, and it's still the rent. A match records which planned transaction the real one settled, and how many days off it was. Unmatched rows aren't a problem — they're often exactly what you want to see, since a real transaction with nothing planned behind it is spending your plan doesn't know about.</p>
+    <p>You can re-categorise, edit or delete any imported row afterwards. Nothing the parser decides is final.</p>
+
+    <div class="callout note">
+        <div class="callout-label">Note — Signs, in one line</div>
+        Amounts on actual transactions are <strong>signed</strong>: money out is negative, money in is positive. That's the one convention to know if you enter an actual by hand or use the flip-the-sign switch.
+    </div>
+
+    <div class="callout tip">
+        <div class="callout-label">Tip — Three months is the useful amount</div>
+        One month of history tells you about one month. Three or more is where <a href="#plan-vs-actual">Plan vs Actual</a> starts distinguishing a habit from an accident — and three observed months per category is also the threshold <a href="#bands">confidence bands</a> need before they'll draw.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 11. Plan vs Actual -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="plan-vs-actual">
+    <h2><span class="section-num">11</span> Plan vs Actual</h2>
+
+    <p>With actuals imported, the app can put the two side by side over the same period and show you where your plan and your life disagree.</p>
+
+    <ul>
+        <li><strong>By category</strong> — planned versus actual, the gap in money and percent, and how many months of evidence sit behind the comparison. That last number matters: a 40% overrun on one month of data is noise, and the same overrun across six months is a fact about you.</li>
+        <li><strong>By month</strong> — planned versus actual net for each month, which is where you see whether a bad month was a blip or the start of a trend.</li>
+        <li><strong>Totals</strong> — the whole period in one line, so you know whether the plan is broadly right with a couple of bad categories, or broadly wrong.</li>
+    </ul>
+
+    <h3>Recalibration prompts</h3>
+    <p>Where a category has been consistently different from its plan, a card appears under <strong>Recalibration</strong>: "Dining has run $310/mo against a $200 plan across 4 months", tagged with how much evidence sits behind it — <em>early days</em>, <em>fair evidence</em>, or <em>strong evidence</em>. Weigh the tag before you act on the number; four months of agreement is an argument, one month is an anecdote.</p>
+    <p>Press <strong>Update the plan</strong> and you're shown exactly which planned transactions would change and from what to what, line by line, before anything happens. Accept it and the amounts are rewritten — proportionally, if several transactions share the category, so the split you set up is preserved. Ignore it and nothing moves. And it's <strong>undoable</strong>, like every other destructive action in the app.</p>
+    <p>If a category has no planned transaction to move, the card says so rather than offering a button that couldn't do anything.</p>
+
+    <div class="callout note">
+        <div class="callout-label">Note — This is tuning, not telling you off</div>
+        <p>Going over on groceries three months running is not a character flaw. It's a signal that the number in your plan is wrong — you don't spend $400 on groceries, you spend $520, and you have never once spent $400.</p>
+        <p>A budget you miss every month isn't a budget, it's a wish, and a forecast built on wishes tells you nothing useful about next March. Correcting the plan to match reality is what makes every other number in the app trustworthy. If you then <em>want</em> to spend less on groceries, that's a decision you make on purpose — and the plan is the place you record the decision, not the place you punish yourself for it.</p>
+    </div>
+
+    <div class="callout tip">
+        <div class="callout-label">Tip — Recalibrate the boring categories, decide about the interesting ones</div>
+        Utilities, fuel, groceries: just take the suggestion. They cost what they cost, and arguing with the meter reading gains you nothing. Save the deliberation for the categories where the number really is a choice.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 12. Confidence Bands -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="bands">
+    <h2><span class="section-num">12</span> Confidence Bands</h2>
+
+    <p>The Running Balance chart can draw a shaded band around the projected line instead of a single confident stroke — a plausible range, showing that a forecast twelve months out is a spread, not a promise.</p>
+
+    <h3>Why the band is usually missing</h3>
+    <p>It won't draw until it has evidence. A category must have at least <strong>three observed months</strong> of imported actuals before it contributes, and with nothing imported there is no band at all.</p>
+    <p>That refusal is the feature. Your plan is deterministic arithmetic: $900 of rent, twelve times. There is no uncertainty <em>inside</em> that number, so any spread drawn around it would have to be invented — a decoration shaped like statistics. Fake error bars are worse than none, because they make a guess look measured, and a range you can't justify is worse than a line you know is a single scenario.</p>
+    <p>So the app waits. Import a few months of real transactions and the band appears, built from how much your actual monthly spending in each category has varied — the 25th, 50th and 75th percentiles of your own observed history. At that point the range means something: it's your spending, not a formula's idea of it.</p>
+
+    <div class="callout note">
+        <div class="callout-label">Note — What the band is, and isn't</div>
+        It reflects the ordinary variability of your spending — how much groceries wobble month to month. It cannot anticipate a new job, a broken boiler, or a category you've only just started spending in. Treat the band as "how much does a normal month vary", not as a worst case. For anything specific and large, build a <a href="#scenarios">scenario</a> instead.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 13. The Debt Payoff Planner -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="debt">
+    <h2><span class="section-num">13</span> The Debt Payoff Planner</h2>
+
+    <p>Give each credit account a balance, an APR and a minimum payment (see <a href="#accounts">Accounts</a>), put whatever you can spare in the <strong>Extra per month</strong> box, and the <strong>Debt Payoff</strong> section simulates clearing the cards — two ways at once, side by side, with the cheaper of the two marked.</p>
+
+    <div class="freq-grid">
+        <div class="freq-card">
+            <div class="freq-name">Avalanche</div>
+            <div class="freq-detail">Highest APR first. Every card gets its minimum; everything spare goes at the most expensive debt. Mathematically the cheapest order — always.</div>
+        </div>
+        <div class="freq-card">
+            <div class="freq-name">Snowball</div>
+            <div class="freq-detail">Smallest balance first. Costs a little more in interest, but clears an entire card sooner — and for a lot of people that first cleared card is what keeps them going.</div>
+        </div>
+    </div>
+
+    <p>Both run the same simulation month by month: interest is added to each balance at its APR ÷ 12, every card receives its minimum, and everything left over — including the minimums freed up by cards that have already cleared — is thrown at the front of the queue. You get each card's payoff date and interest total, the debt-free date, and the total interest for each strategy.</p>
+
+    <h3>What the difference actually looks like</h3>
+    <p>Two cards — $6,000 at 24.99% with a $150 minimum, and $1,500 at 12% with a $40 minimum — and $200 a month spare on top of the $190 of minimums:</p>
+
+    <table class="guide-table">
+        <thead>
+            <tr><th>Strategy</th><th>Debt-free in</th><th>Total interest</th><th>First card cleared</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>Avalanche</strong> (24.99% card first)</td><td>24 months</td><td>$1,778</td><td>month 22</td></tr>
+            <tr><td><strong>Snowball</strong> (smaller balance first)</td><td>25 months</td><td>$2,084</td><td><strong>month 7</strong></td></tr>
+        </tbody>
+    </table>
+
+    <p>So on these numbers avalanche saves <strong>$306 and one month</strong>, while snowball gets one of the two cards off your back <strong>15 months sooner</strong>. That's the real trade, stated in money and months rather than in slogans — and it's small enough here that either answer is defensible, which is precisely the kind of thing you can only know by looking.</p>
+
+    <div class="callout note">
+        <div class="callout-label">Note — Arithmetic, not advice</div>
+        The planner has no opinion about which strategy you should pick, and this app is not a financial adviser. It runs the numbers you entered and shows you what each order costs. Which one you'll actually stick to is a question about you, and it's a legitimate input — the cheapest plan you abandon in month three costs more than the pricier one you finish.
+    </div>
+
+    <div class="callout tip">
+        <div class="callout-label">Tip — Try the extra payment at a few sizes</div>
+        Put $50 in the extra-payment box, then $100, then $200, and watch the debt-free date move. The first $50 usually does far more than you'd expect, because everything above the minimums attacks principal directly. It's the fastest way to see what a small change is genuinely worth.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 14. Goals & Sinking Funds -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="goals">
+    <h2><span class="section-num">14</span> Goals &amp; Sinking Funds</h2>
+
+    <p>A goal is something you're saving <em>toward</em>: a deposit, a wedding, a replacement car, three months of runway. A sinking fund is the same machinery pointed at a bill you know is coming — the $1,200 annual insurance premium you'd rather meet as $100 a month than as one bad morning in June.</p>
+
+    <h3>Setting one up</h3>
+    <div class="steps">
+        <div class="step-card">
+            <span class="step-num">1</span>
+            <div class="step-body">
+                <h4>Add the goal</h4>
+                <p>In the <strong>Savings Goals</strong> section, give it a name — "House Deposit", "Japan 2027", "Car Insurance Fund" — a <strong>Target</strong> amount, and optionally a <strong>By</strong> date. That creates a category of the Goal kind for you; you can also make one by hand in the Categories panel, and the shipped <em>Savings Goal</em> category is there to rename if you only need one.</p>
+            </div>
+        </div>
+        <div class="step-card">
+            <span class="step-num">2</span>
+            <div class="step-body">
+                <h4>Fund it with an ordinary transaction</h4>
+                <p>A $250 monthly transfer from checking to savings, filed under that goal category. Nothing special — it's a transaction like any other, and it appears in the forecast grid in the Goal group.</p>
+            </div>
+        </div>
+        <div class="step-card">
+            <span class="step-num">3</span>
+            <div class="step-body">
+                <h4>Adjust the target whenever it changes</h4>
+                <p>Each goal's target and date stay editable in place. The target is what makes it a goal rather than a label — the percentage, the ETA and the on-track verdict are all measured against it. Leave the date off when there's no real deadline.</p>
+            </div>
+        </div>
+    </div>
+
+    <h3>What you get back</h3>
+    <ul>
+        <li><strong>Accumulated</strong> — how much your plan puts into the goal across the horizon</li>
+        <li><strong>Monthly run-rate</strong> — the average per month, which is the number to change if the ETA disappoints you</li>
+        <li><strong>Percent of target</strong> — how far the horizon gets you</li>
+        <li><strong>ETA</strong> — the month the target is met. If the horizon isn't long enough to reach it, the ETA is projected beyond the horizon at your current rate rather than reported as "never"</li>
+        <li><strong>On track</strong> — with a target date set, whether the ETA lands before it</li>
+    </ul>
+
+    <div class="callout tip">
+        <div class="callout-label">Tip — Sinking funds turn lumpy bills into flat ones</div>
+        Any annual bill can become a sinking fund: divide it by twelve, set that as a monthly transfer into a goal category, and set the target to the bill. Your <a href="#insights">Tightest Week</a> and <a href="#calendar">bills calendar</a> both get calmer, because the money is already set aside when the bill lands.
+    </div>
+
+    <div class="callout note">
+        <div class="callout-label">Note — Goals count as money kept</div>
+        Funding a goal is saving, not spending. The <em>Savings Rate</em> insight counts money going into a goal category as kept, exactly as it does savings and debt principal — otherwise the app would mark you down for the behaviour it's asking you to adopt.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 15. The Bills Calendar -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="calendar">
+    <h2><span class="section-num">15</span> The Bills Calendar</h2>
+
+    <p>The <strong>Bills Calendar</strong> section — headed <em>Pay vs bills</em> — draws a calendar of the forecast, one square per day, coloured by that day's net: green where money lands, red where it leaves, barely tinted where nothing much happens. Step through the months with the arrows, and click a day to see exactly what falls on it and for how much.</p>
+
+    <h3>Why a calendar, when you already have monthly totals</h3>
+    <p>Because a month is not experienced as a total. Consider a perfectly ordinary month that ends $300 up — a good month by every summary row in the app. Now look at the shape of it: rent, the car payment and the insurance renewal all fall on the 1st and 2nd, and the paycheck doesn't arrive until the 14th. Between those dates you are living on whatever was left over, and the monthly figure said nothing about that.</p>
+    <p>The calendar is where you see it — and where you see the fix, which is usually not "spend less" but "move that direct debit to the 16th". Most banks will change a payment date if you ask.</p>
+
+    <div class="callout tip">
+        <div class="callout-label">Tip — Read it alongside Tightest Week</div>
+        The <a href="#insights">Tightest Week</a> insight names the worst seven-day stretch in the horizon. The calendar shows you what's <em>in</em> that stretch. One tells you there's a problem, the other tells you which bill to move.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 16. Scenarios -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="scenarios">
+    <h2><span class="section-num">16</span> Scenarios</h2>
+
+    <p>A scenario is a named set of changes layered over your base plan. It doesn't edit your plan — it's a lens you look through, and you can take it off again.</p>
+
+    <p>Each scenario holds any number of changes, and there are only three kinds:</p>
+    <ul>
+        <li><strong>Add</strong> a transaction that doesn't exist in the base plan — childcare, a second rent, a new subscription</li>
+        <li><strong>Remove</strong> one that does — the rent on the flat you're leaving</li>
+        <li><strong>Modify</strong> one — change its amount, its start or end date, its escalation, or pause it</li>
+    </ul>
+
+    <table class="guide-table">
+        <thead>
+            <tr><th>Scenario</th><th>Typically holds</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>New job</strong></td><td>Modify the salary line upward from a start date; add a commute; remove the freelance income it replaces</td></tr>
+            <tr><td><strong>Baby</strong></td><td>Add childcare from a date; pause the travel fund; modify groceries upward</td></tr>
+            <tr><td><strong>The move</strong></td><td>End the current rent in June; add the new, larger one from July; add a one-time moving cost and deposit</td></tr>
+            <tr><td><strong>Lean month</strong></td><td>Cut the discretionary lines by half and see how much runway that actually buys</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Switching and comparing</h3>
+    <p>The <strong>Scenarios</strong> section lists your base plan first — labelled <em>everything you have entered</em> — with each scenario beneath it, and marks which one is active. Activate a scenario and the entire app recalculates through it: the forecast grid, every chart, every insight card. Switch back and everything returns. Your base plan is never modified in place, so there is nothing to undo and nothing to be careful about; a scenario you delete takes only its own changes with it.</p>
+    <p>Underneath, <strong>Base plan vs each scenario</strong> is the view to reach for when you're actually deciding. Each row is the whole forecast rebuilt with that scenario's changes applied, so you can read closing cash, net worth and monthly net down the column instead of trying to remember what the numbers looked like a minute ago. Nothing you've entered is altered by looking.</p>
+
+    <div class="callout tip">
+        <div class="callout-label">Tip — Build the scenario before the conversation</div>
+        "Can we afford it?" is much easier to answer with two columns on screen. Build the scenario first, look at the comparison, <em>then</em> have the discussion — the argument tends to be shorter, and about the right things.
+    </div>
+
+    <div class="callout note">
+        <div class="callout-label">Note — Scenarios versus duplicating a transaction</div>
+        Duplicating and pausing transactions still works for a quick one-line what-if. Reach for a scenario when the change is several transactions that belong together, when you want to keep it around, or when you want to compare it against the base plan rather than replace it.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 17. Export, Import & Backup -->
 <!-- ─────────────────────────────────────────── -->
 <section class="guide-section" id="export">
-    <h2><span class="section-num">9</span> Excel &amp; JSON Export / Import</h2>
+    <h2><span class="section-num">17</span> Export, Import &amp; Backup</h2>
 
     <p>Your data lives in your browser's LocalStorage — it persists between visits on the same browser and device. But LocalStorage can be cleared. Export regularly to keep a portable backup.</p>
 
@@ -985,7 +1394,7 @@ a.kicker:hover { color: var(--accent); }
         </thead>
         <tbody>
             <tr><td><code>Accounts</code></td><td>Every account — id, name, type, starting balance, as-of date, plus <code>apr</code> and <code>minPayment</code> for credit cards</td></tr>
-            <tr><td><code>Categories</code></td><td>Every category — id, name, kind, color</td></tr>
+            <tr><td><code>Categories</code></td><td>Every category — id, name, kind, color, plus the target amount and target date on Goal categories</td></tr>
             <tr><td><code>Transactions</code></td><td>Every transaction with all its fields — kind, amount, category, account (and from-account for transfers), frequency, custom interval, start and end dates, escalation, tags, notes, paused state</td></tr>
             <tr><td><code>Settings</code></td><td>Schema version, currency, the global forecast horizon, and <em>one row per per-chart horizon override</em> — so a re-import restores the same view you left, not just the same numbers</td></tr>
             <tr><td><code>Forecast</code></td><td>A snapshot of the projection: one row per transaction (name, its category, a column per month, and a total), then the income, expense, net cash flow and closing balance summary rows</td></tr>
@@ -1001,8 +1410,27 @@ a.kicker:hover { color: var(--accent); }
 
     <p>To edit amounts in Excel and re-import: export → open the <code>Transactions</code> sheet → change any amount, frequency, or date → save → import the file back. Every change ripples through the forecast and charts immediately.</p>
 
+    <p>A file written by a <em>newer</em> version of the app is refused rather than imported, because loading it here would silently drop the fields this build doesn't know about and then save that loss back over your data. The message tells you which format version the file is and which one this copy understands.</p>
+
     <h3>JSON ({ JSON } / ⇪ JSON)</h3>
     <p>A lighter alternative to Excel — a single <code>.json</code> file containing all your state. Useful for quickly transferring data between browsers or devices, or sharing a budget template with someone else. Same replace-all import semantics apply.</p>
+    <p><strong>JSON is the complete one.</strong> The workbook is designed to be readable and editable in Excel, so it carries accounts, categories, transactions and settings. The JSON file carries everything the app knows — including your <a href="#import-actuals">imported actuals</a>, your <a href="#checkins">check-in history</a> and your <a href="#scenarios">scenarios</a>. If you're moving to a new machine or keeping one true backup, make it the JSON.</p>
+
+    <h3>Encrypted export (optional)</h3>
+    <p>The <strong>Encrypted export</strong> block of the <strong>Backup &amp; Portability</strong> section writes a JSON export that's scrambled with a passphrase — worth doing when the file is headed for a shared computer, a USB stick, or a backup somewhere you don't fully control.</p>
+    <p>Type the passphrase twice, tick the box confirming you understand it can't be recovered, and press <strong>Export encrypted JSON</strong>. To open one again, use the ordinary <strong>⇪ JSON</strong> import button and pick the encrypted file — you're asked for the passphrase at that point.</p>
+    <p>The scrambling uses the browser's own encryption engine: the passphrase is stretched into a key with <strong>PBKDF2-SHA256</strong> (310,000 rounds), and the file is encrypted with <strong>AES-GCM</strong>. No server, no account, no key held anywhere — this is a lock on a file on your disk, applied on your machine.</p>
+
+    <div class="callout warn">
+        <div class="callout-label">Important — Forget the passphrase and the file is gone. Permanently.</div>
+        <p>There is no reset link, no recovery code, no security question, no support address and no back door. Nobody can open that file for you — not the person who wrote this app, not anyone. That isn't an oversight or a feature nobody has got round to: a back door would defeat the entire point of encrypting it.</p>
+        <p>Before you encrypt anything, decide where the passphrase is written down — a password manager, or paper somewhere you trust. <strong>Keep a plain export as well until you're certain the passphrase is safe.</strong> If you'd rather not carry that risk at all, don't encrypt: an ordinary export in a folder only you can reach is a perfectly reasonable choice, and it's the default.</p>
+    </div>
+
+    <div class="callout note">
+        <div class="callout-label">Note — Two limits worth knowing</div>
+        Encryption applies to the <strong>JSON</strong> export only — an encrypted <code>.xlsx</code> wouldn't open in Excel, which is the whole point of the workbook. And a <a href="#live-workbook">connected live file</a> is always written in plain text, since the app has to be able to read and rewrite it continuously. Browsers also withhold their encryption engine from pages opened straight from a folder, so if you're on a <code>file://</code> address the block will say so; serving the folder over <code>http://localhost</code> enables it.
+    </div>
 
     <h3>The export-age indicator</h3>
     <p>The app keeps track of when you last exported and shows it in the header — <em>Exported today</em>, <em>Exported 12d ago</em>, or <em>Never exported</em>. If it's been more than a month and you have data worth losing, it says so and offers both export buttons on the spot. It's the one nag in the app, and it's there because a cleared browser takes an un-exported budget with it.</p>
@@ -1014,10 +1442,56 @@ a.kicker:hover { color: var(--accent); }
 </section>
 
 <!-- ─────────────────────────────────────────── -->
-<!-- 10. Settings & Housekeeping -->
+<!-- 18. Live Workbook Mode -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="live-workbook">
+    <h2><span class="section-num">18</span> Live Workbook Mode</h2>
+
+    <p>Normally the cycle is: work in the app, remember to export, and later import the file back. The <strong>Live file</strong> block of the <strong>Backup &amp; Portability</strong> section removes the round trip. Connect the app to a <code>.json</code> or <code>.xlsx</code> file on your computer and every save writes that file as well as the browser. The spreadsheet stops being a snapshot you remember to take and becomes the data itself.</p>
+
+    <h3>Connecting</h3>
+    <ul>
+        <li><strong>Connect a file</strong> — choose a location and name, and the app creates the file and starts writing it. Pick <code>.json</code> for everything, or <code>.xlsx</code> if you want the workbook itself to be the live file.</li>
+        <li><strong>Use an existing file</strong> — point at a file you already have. Because that file and the browser can disagree, you're asked which way to resolve it first: <em>load the file into the app</em> (replacing what's in the browser) or <em>overwrite the file</em> with what the browser holds. It won't guess.</li>
+        <li><strong>Write now</strong> and <strong>Load from file</strong> force a save or a reload on demand — handy after another device has been editing.</li>
+        <li><strong>Reconnect</strong> appears when the app remembers your file from a previous session but the browser needs you to re-grant permission. <strong>Disconnect</strong> stops writing; the file stays exactly as it was last written.</li>
+    </ul>
+
+    <h3>Sync with no server, no account, and no third party</h3>
+    <p>Put that file in a folder your computer already syncs — iCloud Drive, Dropbox, OneDrive, Google Drive, Syncthing — and you have multi-device sync for free. Your sync client moves the file exactly as it moves your other documents, and every device opens the same one. Nothing about your budget passes through anything belonging to this app, because there is nothing belonging to this app: no service, no account, no server, and nothing of yours on anyone else's computer.</p>
+
+    <div class="callout warn">
+        <div class="callout-label">Watch out — Last write wins</div>
+        File sync is not merging. If two devices are editing the same file at once, one version wins and the other's edits are lost — or your sync client leaves a "conflicted copy" beside the original. Let one device finish syncing before you pick up the next, and if another device has been at it, press <strong>Load from file</strong> before you start editing.
+    </div>
+
+    <h3>Where it works</h3>
+    <p>Live mode uses the browser's File System Access API, which exists only in <strong>Chromium-based browsers</strong> — Chrome, Edge, Brave, Opera, Arc — and only on a secure origin. Two consequences worth knowing:</p>
+    <ul>
+        <li><strong>Firefox and Safari don't implement it at all</strong>, so the buttons won't appear there.</li>
+        <li><strong>Opening the app straight from a folder isn't enough.</strong> No browser hands a <code>file://</code> page write access to a file on your disk. Serve the folder over <code>http://localhost</code> (for example <code>python3 -m http.server</code> in the project folder) or use a hosted copy over https.</li>
+    </ul>
+    <p>Whenever it's unavailable, the panel says which of those reasons applies rather than simply hiding. And it isn't a downgrade: <strong>the export and import buttons remain the fully-supported path everywhere</strong>, with the same data and the same formats. Nothing is locked behind live mode.</p>
+
+    <h3>What to expect</h3>
+    <ul>
+        <li><strong>The browser asks permission for that one file.</strong> You pick it; the app can touch nothing else. Being asked again in a new session is the browser protecting you, not a fault — press Reconnect.</li>
+        <li><strong>Writes are debounced and rate-limited.</strong> Changes land in the file a moment after you stop editing, and never more than once a second, so a burst of typing doesn't thrash your disk or your sync client.</li>
+        <li><strong>LocalStorage keeps working too.</strong> Connecting a file adds a destination; it doesn't remove the one you had.</li>
+        <li><strong>A live file is written in plain text</strong> — the app has to reread and rewrite it constantly. If you need the file locked, use an <a href="#export">encrypted export</a> instead.</li>
+    </ul>
+
+    <div class="callout tip">
+        <div class="callout-label">Tip — Keep dated exports as well</div>
+        A live file is a working file: whatever you do is done immediately, mistakes included. Export a plain dated copy every so often and keep it somewhere the live file isn't. Live mode is convenience; that copy is your safety net.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 19. Settings & Housekeeping -->
 <!-- ─────────────────────────────────────────── -->
 <section class="guide-section" id="settings">
-    <h2><span class="section-num">10</span> Settings &amp; Housekeeping</h2>
+    <h2><span class="section-num">19</span> Settings &amp; Housekeeping</h2>
 
     <p>Everything the app can be configured with lives in the header bar. There is no settings page, no account, and nothing to sign in to.</p>
 
@@ -1031,25 +1505,26 @@ a.kicker:hover { color: var(--accent); }
     <p>Categories, Transactions, Forecast, and Visualizations each have a <strong>▾</strong> toggle in their header. Collapse the ones you're not working on — with sixty transactions and six charts on one page, collapsing Transactions to study the forecast grid makes a real difference.</p>
 
     <h3>Where your data lives</h3>
-    <p>Everything is saved to your browser's LocalStorage, automatically, a moment after each change. That storage is tied to <em>this browser on this device</em>: your budget won't follow you to a different browser, a different machine, or a private window, and clearing site data removes it. Moving between devices is what the JSON export is for.</p>
+    <p>Everything is saved to your browser's LocalStorage, automatically, a moment after each change. That storage is tied to <em>this browser on this device</em>: your budget won't follow you to a different browser, a different machine, or a private window, and clearing site data removes it. Moving between devices is what the JSON export — or <a href="#live-workbook">live workbook mode</a> — is for.</p>
+    <p>That's the complete list of places your data goes: this browser, and any file you explicitly export or connect. There is no account, no server and no cloud copy, so there is nothing to sign into and nothing to delete anywhere else.</p>
 
     <h3>Undo</h3>
     <p>Deleting an account, a category, or a transaction puts a message at the top of the app with an <strong>Undo</strong> button next to it. One click puts everything back exactly as it was, including any transactions that were reassigned as part of the delete. It's a single level of undo — the last destructive action, not a full history — so use it while the message is still on screen.</p>
 
     <h3>Reset</h3>
-    <p>The trash icon in the header clears your data after a confirmation dialog. It removes every account and every transaction and returns your settings to their defaults — and it <strong>restores the 18 default categories</strong>, including any you had renamed or deleted. It's a clean slate, not an empty one. Export first if there's anything you'd want back.</p>
+    <p>The trash icon in the header clears your data after a confirmation dialog. It removes every account and every transaction and returns your settings to their defaults — and it <strong>restores the 19 default categories</strong>, including any you had renamed or deleted. It's a clean slate, not an empty one. Export first if there's anything you'd want back.</p>
 
     <div class="callout warn">
         <div class="callout-label">Important — Export is your only backup</div>
-        There is no cloud copy of your budget, because there is no cloud. If LocalStorage gets cleared and you have no exported file, the data is gone. Export to Excel or JSON after any session where you changed something that mattered.
+        There is no cloud copy of your budget, because there is no cloud. If LocalStorage gets cleared and you have no exported file, the data is gone. Export to Excel or JSON after any session where you changed something that mattered — and remember that JSON is the format that carries your actuals, check-ins and scenarios as well.
     </div>
 </section>
 
 <!-- ─────────────────────────────────────────── -->
-<!-- 11. Pro Tips -->
+<!-- 20. Pro Tips -->
 <!-- ─────────────────────────────────────────── -->
 <section class="guide-section" id="tips">
-    <h2><span class="section-num">11</span> Pro Tips</h2>
+    <h2><span class="section-num">20</span> Pro Tips</h2>
 
     <div class="tips-grid">
         <div class="tip-card">
@@ -1086,6 +1561,26 @@ a.kicker:hover { color: var(--accent); }
             <span class="tip-icon">📊</span>
             <h4>Use 36-month Running Balance</h4>
             <p>Set the Running Balance chart to 36 months even if your main horizon is 12. The long-arc view reveals whether your savings are genuinely growing or just holding steady, which the short view can obscure.</p>
+        </div>
+        <div class="tip-card">
+            <span class="tip-icon">📥</span>
+            <h4>Import three months, then recalibrate once</h4>
+            <p>Download three months of transactions from your bank, import them, and work through the <a href="#plan-vs-actual">Plan vs Actual</a> suggestions in one sitting. It's the single highest-value hour you can spend in this app: everything downstream — insights, bands, scenarios — gets more honest at once.</p>
+        </div>
+        <div class="tip-card">
+            <span class="tip-icon">📍</span>
+            <h4>Check in every payday</h4>
+            <p>Attach a <a href="#checkins">balance check-in</a> to something you already do. Payday works well. A run of small drifts is far more informative than one heroic reconciliation every six months.</p>
+        </div>
+        <div class="tip-card">
+            <span class="tip-icon">🎭</span>
+            <h4>Keep a "lean month" scenario on file</h4>
+            <p>Build a <a href="#scenarios">scenario</a> with the discretionary lines halved and leave it there. When something goes wrong, you already know exactly how much runway cutting back buys you, and you don't have to work it out in a bad week.</p>
+        </div>
+        <div class="tip-card">
+            <span class="tip-icon">💳</span>
+            <h4>Test the extra payment before committing it</h4>
+            <p>In the <a href="#debt">payoff planner</a>, try the extra payment at $50, $100 and $200 before deciding. Seeing the debt-free date jump is a better motivator than any amount of resolve.</p>
         </div>
         <div class="tip-card">
             <span class="tip-icon">💾</span>
