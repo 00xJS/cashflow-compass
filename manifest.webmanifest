@@ -1,0 +1,23 @@
+{
+    "name": "Cashflow Compass",
+    "short_name": "Compass",
+    "description": "Local-first personal cashflow forecasting. Everything is computed in the browser and nothing ever leaves the machine.",
+    "lang": "en",
+    "dir": "ltr",
+    "start_url": ".",
+    "scope": ".",
+    "id": "./",
+    "display": "standalone",
+    "orientation": "any",
+    "background_color": "#0a0d1c",
+    "theme_color": "#0a0d1c",
+    "categories": ["finance", "productivity", "utilities"],
+    "icons": [
+        {
+            "src": "icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        }
+    ]
+}

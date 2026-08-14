@@ -485,11 +485,13 @@ a.kicker:hover { color: var(--accent); }
         <li><a href="#what-is">What is Cashflow Compass?</a></li>
         <li><a href="#first-10">Your First 10 Minutes</a></li>
         <li><a href="#accounts">Accounts</a></li>
+        <li><a href="#categories">Categories</a></li>
         <li><a href="#transactions">Transactions &amp; Frequencies</a></li>
         <li><a href="#forecast">The Forecast Grid</a></li>
         <li><a href="#charts">Charts</a></li>
         <li><a href="#insights">Insight Cards</a></li>
         <li><a href="#export">Excel &amp; JSON Export / Import</a></li>
+        <li><a href="#settings">Settings &amp; Housekeeping</a></li>
         <li><a href="#tips">Pro Tips</a></li>
     </ol>
 </div>
@@ -506,7 +508,7 @@ a.kicker:hover { color: var(--accent); }
 
     <div class="callout note">
         <div class="callout-label">How it works</div>
-        All data is stored in your browser's LocalStorage — nothing is sent anywhere. You can export the full state to an Excel workbook or JSON file at any time as a portable backup, and re-import it later to pick up exactly where you left off.
+        All data is stored in your browser's LocalStorage, and the app makes no network requests at all — no server, no analytics, no third-party service. The two libraries it uses (Chart.js for the charts, SheetJS for the Excel round-trip) ship inside the <code>vendor/</code> folder rather than loading from a CDN, so the whole thing works offline: open <code>index.html</code> straight from disk, on a plane, with the Wi-Fi off, and everything still runs. You can export the full state to an Excel workbook or JSON file at any time as a portable backup, and re-import it later to pick up exactly where you left off.
     </div>
 
     <h3>What it's great for</h3>
@@ -519,10 +521,18 @@ a.kicker:hover { color: var(--accent); }
 
     <h3>What it doesn't do (yet)</h3>
     <ul>
-        <li>Connect to your bank — all data is entered manually</li>
         <li>Track actual spending vs. budget — this is a forward-looking planner, not a transaction tracker</li>
-        <li>Calculate debt payoff schedules (on the roadmap)</li>
+        <li>Read a statement file you've downloaded from your bank yourself (CSV / OFX) — planned, not built yet</li>
     </ul>
+
+    <h3>What it will never do: link to your bank</h3>
+    <p>Cashflow Compass will never ask for online banking credentials and will never connect to a real account — no Plaid, no open banking, no aggregator of any kind. This isn't a feature waiting for a future release; it's a deliberate design choice, and it's why the rest of the app can be as simple as it is.</p>
+    <ul>
+        <li><strong>Privacy.</strong> Data that never leaves the machine can't be sold, subpoenaed, or spilled in someone else's breach. There is no server here to hold it and no company behind it to hold it for you.</li>
+        <li><strong>Nothing to trust.</strong> Bank linking means handing credentials — or a long-lived token — to a middleman. A planning tool doesn't need that level of access to do its job, so it doesn't ask for it.</li>
+        <li><strong>Nothing to break.</strong> Aggregator connections rot: banks change their APIs, tokens expire, an institution drops off the supported list, and the tool that depended on it quietly stops being accurate. Typed-in numbers keep working forever.</li>
+    </ul>
+    <p>Opening a file <strong>you</strong> downloaded from your own bank is a completely different thing — no credentials, no third party, no live connection — and that <em>is</em> on the roadmap.</p>
 </section>
 
 <!-- ─────────────────────────────────────────── -->
@@ -583,37 +593,101 @@ a.kicker:hover { color: var(--accent); }
 <section class="guide-section" id="accounts">
     <h2><span class="section-num">3</span> Accounts</h2>
 
-    <p>Accounts serve one purpose: they set the <strong>starting balance</strong> that the forecast builds from. Every month, the projected net cash flow is added to the running balance, and you can see exactly when and why you might dip into (or out of) savings.</p>
+    <p>Accounts hold the balances the forecast builds from. Each account carries its own starting balance and the date that balance was true, and the forecast tracks them <em>separately</em> — every transaction is assigned to an account, so money leaves and lands where it really would.</p>
+
+    <p>Two different totals come out of that. <strong>Net worth</strong> is everything you own minus what you owe. <strong>Liquid cash</strong> is only the money you could actually spend this week — and it's the liquid figure the red-balance warnings watch, so a healthy brokerage account can't paper over a checking account that runs dry.</p>
 
     <table class="guide-table">
         <thead>
             <tr><th>Account type</th><th>How the balance is treated</th></tr>
         </thead>
         <tbody>
-            <tr><td><strong>Checking</strong></td><td>Starting balance added to net worth — the primary account for most forecasts</td></tr>
-            <tr><td><strong>Savings</strong></td><td>Added to net worth — good for modeling an emergency fund or sinking fund</td></tr>
-            <tr><td><strong>Credit Card</strong></td><td><em>Subtracted</em> from net worth (it's a liability) — enter the balance as a positive number</td></tr>
-            <tr><td><strong>Investment</strong></td><td>Added to net worth — useful for seeing total picture including a brokerage account</td></tr>
-            <tr><td><strong>Cash</strong></td><td>Added to net worth — for cash on hand you want to include</td></tr>
+            <tr><td><strong>Checking</strong></td><td>Spendable cash — counts toward both net worth and liquid cash. The primary account for most forecasts</td></tr>
+            <tr><td><strong>Savings</strong></td><td>Spendable cash — good for modeling an emergency fund or sinking fund</td></tr>
+            <tr><td><strong>Credit Card</strong></td><td>A liability: <em>subtracted</em> from net worth and never counted as cash. Enter the balance you owe as a positive number, and set the card's <strong>APR</strong> and <strong>minimum payment</strong> (see below)</td></tr>
+            <tr><td><strong>Investment</strong></td><td>Counts toward net worth so you see the full picture, but not toward liquid cash — a brokerage balance isn't this month's rent</td></tr>
+            <tr><td><strong>Cash</strong></td><td>Spendable cash — for money on hand you want to include</td></tr>
         </tbody>
     </table>
 
     <h3>The "As of" date</h3>
-    <p>This tells the app when that balance was accurate. Use today's date if you just checked your account. The forecast counts forward from your transaction start dates, so the as-of date anchors the starting point correctly even if you set things up mid-month.</p>
+    <p>This tells the app when that balance was accurate — use today's date if you just checked the account. It isn't decoration. The forecast anchors itself to the <strong>latest</strong> as-of date across your accounts and only counts money from that date forward, so a bill you already paid before then isn't charged to you a second time: it's already reflected in the balance you typed in. That's what lets you set the app up mid-month without your rent, paid on the 1st, being replayed on top of a balance recorded on the 20th.</p>
 
-    <div class="callout note">
-        <div class="callout-label">Note — Multiple accounts</div>
-        You can add as many accounts as you like. The forecast combines all of them into a single running net balance. If you want to track a savings account separately, add a <em>Transfer</em> transaction from checking to savings each month — it won't count as an expense or income, just a movement between accounts.
+    <div class="callout tip">
+        <div class="callout-label">Tip — Keep the as-of dates honest</div>
+        When you refresh a balance, update its as-of date at the same time. If the balance is new but the date is old, the forecast will re-apply everything that has happened since — and your projection will drift low.
+    </div>
+
+    <h3>Transfers — moving money between accounts</h3>
+    <p>Add as many accounts as you like; the forecast keeps a running balance for each one plus the combined totals. To move money between them, add a transaction with the kind set to <strong>Transfer</strong> and pick both ends: the account it comes <em>from</em> and the account it goes <em>to</em>.</p>
+    <p>A transfer is neither income nor an expense, so it never changes your net cash flow or your net worth — it changes only <em>where</em> the money sits. A $500 monthly transfer from checking to savings shows your checking balance growing more slowly and your savings balance climbing, which is exactly what happens in real life.</p>
+
+    <h3>Credit cards, interest, and card payments</h3>
+    <p>Cards work like real cards, which takes a moment to get used to:</p>
+    <ul>
+        <li><strong>Spending on the card</strong> — record the expense against the credit account. It <em>increases</em> the card's balance rather than reducing your cash. Nothing leaves checking, because nothing has yet.</li>
+        <li><strong>Paying the card</strong> — this is a <strong>transfer</strong>, from the cash account you pay out of to the credit account. That's the point where cash actually leaves your checking and the card balance comes down. If you've recorded the purchases too, logging the payment as an expense as well would count the same money twice: once when you swiped, once when you paid.</li>
+        <li><strong>Interest</strong> — set the card's <strong>APR</strong> and the balance accrues interest month by month instead of sitting frozen, so carrying a balance costs you something in the forecast the way it does in life.</li>
+        <li><strong>Minimum payment</strong> — record the smallest payment the issuer accepts, so it's visible how much of what you pay each month is genuinely reducing the balance rather than covering interest.</li>
+    </ul>
+    <p>With an APR and a minimum payment recorded on each card, the app can also project a <strong>payoff schedule</strong>: when each card clears and what the interest will have cost you by then. It pays the highest-APR card down first — the avalanche method, which is the cheapest order mathematically — with every card still receiving its minimum each month.</p>
+
+    <div class="callout warn">
+        <div class="callout-label">Watch out — Don't model the same money twice</div>
+        Pick one lane per card. Either record the individual purchases against the card and pay it down with transfers, or skip the purchase detail and just model the monthly payment. Doing both charges you twice for the same spending and makes the forecast look far worse than reality.
     </div>
 </section>
 
 <!-- ─────────────────────────────────────────── -->
-<!-- 4. Transactions & Frequencies -->
+<!-- 4. Categories -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="categories">
+    <h2><span class="section-num">4</span> Categories</h2>
+
+    <p>Every transaction belongs to a category, and every category belongs to a <strong>kind</strong>. The category is the label you read; the kind is what the app reasons with — it decides which group a row lands in on the forecast grid, and it separates committed costs from the ones you actually control.</p>
+
+    <p>The app ships with <strong>18 default categories</strong> covering the usual shape of a household budget: Salary and Other Income; Housing, Utilities, Home Internet, Phone Bill, Insurance and Subscriptions; Electric, Groceries and Gas / Transport; Dining, Entertainment and Shopping; Savings and Retirement; Debt Payment; and Taxes. Keep the ones that fit, rename the ones that don't, add your own.</p>
+
+    <h3>The eight kinds</h3>
+    <table class="guide-table">
+        <thead>
+            <tr><th>Kind</th><th>What belongs in it</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>Income</strong></td><td>Money coming in — salary, freelance work, rent received, dividends</td></tr>
+            <tr><td><strong>Fixed</strong></td><td>Committed costs that don't move month to month — rent, insurance, phone, subscriptions</td></tr>
+            <tr><td><strong>Variable</strong></td><td>Recurring but fluctuating — groceries, fuel, electricity</td></tr>
+            <tr><td><strong>Discretionary</strong></td><td>Lifestyle spending you could cut this month if you had to — dining, entertainment, shopping</td></tr>
+            <tr><td><strong>Savings</strong></td><td>Money you're deliberately setting aside — emergency fund, retirement contributions</td></tr>
+            <tr><td><strong>Debt</strong></td><td>Loan and credit card payments</td></tr>
+            <tr><td><strong>Tax</strong></td><td>Estimated payments, self-employment tax, anything owed to the revenue service</td></tr>
+            <tr><td><strong>Goal</strong></td><td>A specific target you're funding — a car deposit, a wedding, a trip. No default category uses this kind; create your own when you have something to save toward</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Adding, editing, and deleting</h3>
+    <p>The Categories panel has a small form: a name, a kind, and a color. Add a category and it's immediately available in the transaction form. Click the <strong>✎</strong> button on any row to load it back into the form and change it — the edit applies everywhere that category is used, including its color in every chart.</p>
+    <p>The <strong>✕</strong> button deletes a category. If any transactions are using it, the confirmation asks where to move them and reassigns them as part of the delete — nothing is ever quietly orphaned, and you don't have to go and re-file them by hand first. (The one case it refuses is deleting your last remaining category while transactions still need one; add a replacement first.) Deletes are undoable — see <a href="#settings">Settings &amp; Housekeeping</a>.</p>
+
+    <h3>Colors</h3>
+    <p>The color you pick is the color that category gets in the Spend by Category doughnut, the Category Trend stack, and the Income Sources chart, and it's the dot beside the category name in the transaction list. Defaults are drawn from the Observation Deck palette and are already bright enough to read against the dark cards; if you add your own, pick something with similar punch.</p>
+
+    <h3>Sorting the list</h3>
+    <p>Click the <strong>Name</strong> or <strong>Kind</strong> column header to sort the table A→Z; click the same header again to flip to Z→A. The arrow in the header shows which column is driving the sort and in which direction. This is display only — it changes nothing about your data or the forecast.</p>
+
+    <div class="callout note">
+        <div class="callout-label">Note — How the subscription card finds things</div>
+        The <em>Annual Subscription Cost</em> insight counts the built-in Subscriptions category, any <strong>Fixed</strong> category you name after subscriptions (<code>Work Subscriptions</code> gets picked up automatically), and any transaction you simply tag <code>subscription</code>. That last route is the useful one: a streaming service you'd rather file under Entertainment still lands in the total if you tag it.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 5. Transactions & Frequencies -->
 <!-- ─────────────────────────────────────────── -->
 <section class="guide-section" id="transactions">
-    <h2><span class="section-num">4</span> Transactions &amp; Frequencies</h2>
+    <h2><span class="section-num">5</span> Transactions &amp; Frequencies</h2>
 
-    <p>Transactions are the heart of the app. Each one represents a real recurring (or one-time) cash flow — a paycheck, a subscription, a car insurance renewal. The app supports nine frequency types so you can model virtually any real-world payment schedule.</p>
+    <p>Transactions are the heart of the app. Each one represents a real recurring (or one-time) cash flow — a paycheck, a subscription, a car insurance renewal — and is either <strong>income</strong>, an <strong>expense</strong>, or a <strong>transfer</strong> between two of your accounts (see <a href="#accounts">Accounts</a>). The app supports nine frequency types so you can model virtually any real-world payment schedule.</p>
 
     <div class="freq-grid">
         <div class="freq-card">
@@ -630,7 +704,7 @@ a.kicker:hover { color: var(--accent); }
         </div>
         <div class="freq-card">
             <div class="freq-name">Semi-monthly</div>
-            <div class="freq-detail">Twice a month on the 1st and 15th. 24 occurrences per year. Common for some salaried roles.</div>
+            <div class="freq-detail">Twice a month, 24 times a year — common for salaried roles. The two days come from your start date: start on the 1st for the 1st and 15th, start on the 15th for the 15th and month end, or any other day for that day and a fortnight later (clamped in short months).</div>
         </div>
         <div class="freq-card">
             <div class="freq-name">Monthly</div>
@@ -663,7 +737,7 @@ a.kicker:hover { color: var(--accent); }
     </div>
 
     <h3>Annual escalation %</h3>
-    <p>For transactions that grow over time — rent renewals, cost-of-living raises, utility creep — set an escalation percentage. The amount automatically increases by that % each year from the start date. A 5% escalation on a $900 rent makes it $945 in year 2, $992 in year 3, and so on.</p>
+    <p>For transactions that grow over time — rent renewals, cost-of-living raises, utility creep — set an escalation percentage. The amount steps up by that % on each anniversary of the start date, compounding: a 5% escalation on a $900 rent makes it $945 in year 2, $992 in year 3, and so on.</p>
 
     <h3>Pause / resume</h3>
     <p>Use the pause toggle on any transaction to temporarily suspend it without deleting it. This is useful for gym memberships you've cancelled (but plan to restart), freelance income that stopped, or seasonal expenses that are off right now.</p>
@@ -673,13 +747,28 @@ a.kicker:hover { color: var(--accent); }
 
     <h3>End date</h3>
     <p>Set an end date on any transaction to stop it from appearing in the forecast after a certain point. Perfect for a fixed-term loan payoff, a sublease, or a promotional subscription price that expires.</p>
+
+    <h3>Finding things: search, filters, and sorting</h3>
+    <p>A real budget gets to fifty or sixty transactions quickly. Three controls sit above the list to keep it navigable:</p>
+    <ul>
+        <li><strong>Search</strong> — type anything and the list narrows as you go. It matches on the transaction <em>name</em>, its <em>tags</em>, and its <em>notes</em>, so searching <code>kid</code> finds everything tagged for the kids and searching <code>renews</code> finds the notes you left yourself about renewal dates.</li>
+        <li><strong>Kind filter</strong> — show only income, only expenses, or only transfers.</li>
+        <li><strong>Category filter</strong> — narrow to a single category. Combine it with the search box; the filters stack rather than replace each other.</li>
+    </ul>
+    <p>Four column headers are clickable and sort the visible list: <strong>Name</strong>, <strong>Amount</strong>, <strong>Start</strong>, and <strong>Annualized</strong>. The first click sorts ascending, a second click on the same header flips to descending, and the arrow in the header tells you which is active. Sorting applies to whatever the filters have left on screen, so you can filter to Discretionary, sort by Annualized descending, and see your most expensive habit at the top.</p>
+    <p>The <strong>Next</strong> column shows when each transaction lands next — the quickest way to sanity-check that a start date and frequency are doing what you meant.</p>
+
+    <div class="callout tip">
+        <div class="callout-label">Tip — The Annualized column is the honest one</div>
+        <strong>Annualized</strong> is what each transaction actually costs over the next twelve months, so a $14 monthly subscription ($168) and a $150 annual one line up on the same scale. Sort by it descending once a quarter — the ranking is rarely what you expect.
+    </div>
 </section>
 
 <!-- ─────────────────────────────────────────── -->
-<!-- 5. The Forecast Grid -->
+<!-- 6. The Forecast Grid -->
 <!-- ─────────────────────────────────────────── -->
 <section class="guide-section" id="forecast">
-    <h2><span class="section-num">5</span> The Forecast Grid</h2>
+    <h2><span class="section-num">6</span> The Forecast Grid</h2>
 
     <p>The forecast grid is a month-by-month projection table. Rows are your transactions grouped by category kind; columns are the months in your chosen horizon.</p>
 
@@ -689,27 +778,40 @@ a.kicker:hover { color: var(--accent); }
         </thead>
         <tbody>
             <tr><td><strong>Income</strong></td><td>All income transactions — paychecks, side income, rental income</td></tr>
-            <tr><td><strong>Fixed</strong></td><td>Predictable, recurring expenses. Monthly subscriptions appear first (largest first), then annual ones, then everything else</td></tr>
+            <tr><td><strong>Fixed</strong></td><td>Predictable, recurring expenses. This group orders itself — see <em>How the Fixed group sorts itself</em> below</td></tr>
             <tr><td><strong>Variable</strong></td><td>Expenses that recur but fluctuate — groceries, gas, utilities</td></tr>
             <tr><td><strong>Discretionary</strong></td><td>Lifestyle spending — dining out, entertainment, travel</td></tr>
             <tr><td><strong>Savings</strong></td><td>Savings contributions and sinking funds — vacation fund, emergency fund top-up</td></tr>
             <tr><td><strong>Debt</strong></td><td>Loan and credit card payments</td></tr>
             <tr><td><strong>Tax</strong></td><td>Estimated tax payments and tax-related expenses</td></tr>
+            <tr><td><strong>Goal</strong></td><td>Anything you're funding toward a specific target — a deposit, a wedding, a trip</td></tr>
         </tbody>
     </table>
 
+    <p>Groups appear in that order, and a group with nothing in it is skipped entirely. If a transaction's category has gone missing, its row lands in a final <strong>Other</strong> group at the bottom rather than disappearing.</p>
+
+    <h3>How the Fixed group sorts itself</h3>
+    <p>Fixed costs are the ones you look at most, so the app orders them for you rather than leaving them in entry order. Rows are sorted into three frequency buckets, and the buckets always appear in this order:</p>
+    <ol>
+        <li><strong>Weekly, bi-weekly, semi-monthly, monthly, and quarterly</strong> — anything that hits at least a few times a year</li>
+        <li><strong>Semi-annual and annual</strong> — the big periodic bills</li>
+        <li><strong>One-time and custom</strong> — everything else</li>
+    </ol>
+    <p>Within each bucket, rows are ordered by the amount you typed on the transaction, largest first. That's the raw per-occurrence amount — not the annual total, and not adjusted for escalation — so a $1,200 annual insurance premium sorts <em>below</em> a $12 monthly subscription, because they're in different buckets. Periodic bills stay grouped together instead of being scattered through the list by size.</p>
+
     <h3>Summary rows</h3>
-    <p>Below all the transactions, four summary rows appear for every month:</p>
+    <p>Below all the transactions, five summary rows appear for every month:</p>
     <ul>
         <li><strong>Total Income</strong> — all income for that month</li>
         <li><strong>Total Expenses</strong> — all outflows combined</li>
         <li><strong>Net Cash Flow</strong> — income minus expenses (green = positive, red = negative)</li>
-        <li><strong>End-of-Month Balance</strong> — running cumulative balance; turns red if it goes negative</li>
+        <li><strong>End-of-Month Cash</strong> — running spendable balance; turns red if it goes negative. This is the row that answers "will I actually make it through the month"</li>
+        <li><strong>Net Worth</strong> — everything you own minus everything you owe, including investments and card debt. It can be climbing while cash is falling, which is exactly why both rows are here</li>
     </ul>
 
     <div class="callout warn">
         <div class="callout-label">Watch out</div>
-        A red End-of-Month Balance means your projected balance goes negative — you'd need to dip into savings or credit to cover that month. Look for the transaction causing the spike (often an annual expense) and either plan a buffer or adjust the timing.
+        A red End-of-Month Cash figure means you'd run out of spendable money that month — you'd need to dip into credit or sell something to cover it. Look for the transaction causing the spike (often an annual expense) and either plan a buffer or adjust the timing.
     </div>
 
     <h3>Choosing your horizon</h3>
@@ -717,10 +819,10 @@ a.kicker:hover { color: var(--accent); }
 </section>
 
 <!-- ─────────────────────────────────────────── -->
-<!-- 6. Charts -->
+<!-- 7. Charts -->
 <!-- ─────────────────────────────────────────── -->
 <section class="guide-section" id="charts">
-    <h2><span class="section-num">6</span> Charts</h2>
+    <h2><span class="section-num">7</span> Charts</h2>
 
     <p>Six charts visualize your forecast from different angles. Every chart has its own horizon dropdown — you can keep most on the global setting and override one or two for a deeper look without affecting the rest of the page.</p>
 
@@ -747,7 +849,7 @@ a.kicker:hover { color: var(--accent); }
         </div>
         <div class="chart-desc-card">
             <div class="chart-name">🏆 Top 10 Costs</div>
-            <p>Horizontal bar chart of the 10 largest individual line items annualized over the horizon. Hover any bar for the exact dollar amount. Good for identifying the highest-leverage cuts.</p>
+            <p>Horizontal bar chart of the 10 individual expense lines that cost you the most <em>over the chosen horizon</em>. These are totals for the window, not annualized figures, so the ranking moves when you change the horizon: a $5,000 one-time car repair tops a 12-month view, but over 36 months a $200 monthly bill ($7,200) passes it. Hover any bar for the exact amount.</p>
             <div class="chart-action">Look for: items you'd forgotten about or underestimated</div>
         </div>
         <div class="chart-desc-card">
@@ -764,20 +866,22 @@ a.kicker:hover { color: var(--accent); }
 </section>
 
 <!-- ─────────────────────────────────────────── -->
-<!-- 7. Insight Cards -->
+<!-- 8. Insight Cards -->
 <!-- ─────────────────────────────────────────── -->
 <section class="guide-section" id="insights">
-    <h2><span class="section-num">7</span> Insight Cards</h2>
+    <h2><span class="section-num">8</span> Insight Cards</h2>
 
-    <p>The Insights panel auto-generates eight cards from your forecast data. They update instantly when you change transactions or the horizon.</p>
+    <p>The Insights panel reads your forecast and writes the findings in plain language. Cards update instantly when you change a transaction or the horizon.</p>
+
+    <p><strong>Cards appear only where your data supports them.</strong> An empty budget produces <em>no</em> cards at all — the panel simply invites you to add something. From there most cards are conditional: no income stream means no savings rate, no subscriptions means no subscription card, no spending at all means no biggest-category card. A few always report once you have data, and say so plainly when there's nothing to flag ("0 days", "None forecast") — an all-clear is information too.</p>
 
     <div class="insight-list">
         <div class="insight-row positive">
             <div class="ins-header">
                 <span class="ins-num">1</span>
-                <h4>Average Savings Rate</h4>
+                <h4>Savings Rate</h4>
             </div>
-            <p>The percentage of your total income that isn't consumed by expenses over the horizon. A rate of 20%+ is considered healthy. Below 10% means most income is committed to expenses before it arrives. If this number is negative, expenses exceed income on average.</p>
+            <p>The percentage of your income you actually keep over the horizon. Money you move into savings, toward a goal, or onto debt principal counts as <em>kept</em>, not spent — otherwise the card would penalise you for the exact behaviour it's measuring. A rate of 20%+ is healthy; below 10% means most of your income is committed before it arrives; negative means expenses exceed income on average.</p>
         </div>
         <div class="insight-row fact">
             <div class="ins-header">
@@ -789,53 +893,86 @@ a.kicker:hover { color: var(--accent); }
         <div class="insight-row fact">
             <div class="ins-header">
                 <span class="ins-num">3</span>
-                <h4>Annual Subscription Cost</h4>
+                <h4>Fixed vs Variable</h4>
             </div>
-            <p>The annualized total of everything in the <em>Subscriptions</em> category — streaming services, software, memberships. The monthly-equivalent is shown beneath. Subscription creep is real; this card makes the full annual number visible in one place.</p>
+            <p>What share of your everyday spending is <em>committed</em> — the Fixed group: rent, insurance, phone, subscriptions — measured against everything flexible (Variable plus Discretionary). A high fixed share isn't automatically bad, but it tells you how much room you'd have if income dropped: you can skip a dinner out, not a lease payment. Past roughly three-quarters fixed, the card starts warning you.</p>
         </div>
-        <div class="insight-row info">
+        <div class="insight-row fact">
             <div class="ins-header">
                 <span class="ins-num">4</span>
-                <h4>Emergency Fund Coverage</h4>
+                <h4>Annual Subscription Cost</h4>
             </div>
-            <p>How many months of expenses your starting balance would cover at the current average burn rate. The conventional target is 3–6 months. Green = 6+ months, blue = 3–6, yellow = 1–3, red = less than 1.</p>
+            <p>The annualized total of your subscriptions, with the monthly equivalent beneath. It picks up the built-in Subscriptions category, any Fixed category you've named after subscriptions, and anything you've simply tagged <code>subscription</code> — so a streaming service filed under Entertainment still gets counted if you tag it. Subscription creep is real; this makes the full annual number visible in one place.</p>
         </div>
         <div class="insight-row info">
             <div class="ins-header">
                 <span class="ins-num">5</span>
+                <h4>Emergency Fund</h4>
+            </div>
+            <p>Your liquid cash measured against four tiers instead of one blanket target: a <strong>$1,000 starter buffer</strong>, then <strong>six weeks of take-home pay</strong>, then <strong>three months of expenses</strong>, then <strong>six</strong>. The card tells you which tier you're past and exactly how much is left to reach the next one, because "build a bigger buffer" means something very different at three weeks of runway than at five months. It's also shown at zero and below — that's precisely when it matters most.</p>
+        </div>
+        <div class="insight-row warning">
+            <div class="ins-header">
+                <span class="ins-num">6</span>
                 <h4>Days in the Red</h4>
             </div>
-            <p>A count of forecast days where the projected balance goes negative, plus the lowest point reached. Zero is the target. If any days appear, find the month in the grid where the balance turns red and look for the spike — usually a large annual expense landing without a buffer.</p>
+            <p>A count of forecast days where your <strong>liquid cash</strong> goes negative, plus the lowest point reached. Note that this looks at spendable cash, not net worth — an overdrawn checking account is a real problem even if a brokerage balance keeps your net worth healthy. Zero is the target.</p>
+        </div>
+        <div class="insight-row warning">
+            <div class="ins-header">
+                <span class="ins-num">7</span>
+                <h4>First Shortfall</h4>
+            </div>
+            <p>The exact date your liquid cash is first projected to drop below zero, and how many days away that is. The red-day count tells you how bad; this tells you how long you have. It's the most actionable number in the panel — go to that date in the forecast grid and look at what lands just before it. When nothing goes negative, the card says so.</p>
+        </div>
+        <div class="insight-row warning">
+            <div class="ins-header">
+                <span class="ins-num">8</span>
+                <h4>Tightest Week</h4>
+            </div>
+            <p>The worst seven-day stretch in the horizon by net cash flow, with its exact dates — effectively "keep at least this much in reserve". Monthly totals hide this completely: a month can finish comfortably positive and still contain a week where the rent has gone out and the paycheck hasn't come in. This is the card that catches near-misses.</p>
+        </div>
+        <div class="insight-row info">
+            <div class="ins-header">
+                <span class="ins-num">9</span>
+                <h4>Best Month and Worst Month</h4>
+            </div>
+            <p>Two cards, naming the strongest and weakest months in the horizon by net cash flow, each with the income and expenses behind it. The worst month is usually where an annual bill lands; seeing the pair together is what tells you whether a shortfall is a real trend or one lumpy renewal you can plan around. They need a horizon of at least two months to mean anything, so a one-month view omits them.</p>
         </div>
         <div class="insight-row positive">
             <div class="ins-header">
-                <span class="ins-num">6</span>
+                <span class="ins-num">10</span>
                 <h4>3-Paycheck Months</h4>
             </div>
             <p>For bi-weekly income streams, shows which calendar months will have three pay deposits instead of two. This happens twice a year and represents a meaningful windfall — equal to one full extra paycheck. The card flags the specific months so you can plan ahead: extra savings, debt paydown, or a budgeted splurge.</p>
         </div>
         <div class="insight-row info">
             <div class="ins-header">
-                <span class="ins-num">7</span>
-                <h4>What if you cut [Biggest Category] by 20%?</h4>
+                <span class="ins-num">11</span>
+                <h4>If you cut [category] by 20%</h4>
             </div>
-            <p>A quick what-if simulation: if you reduced spending in your largest expense category by 20%, how much would you save over the full horizon? This puts a dollar figure on the potential impact of the most high-leverage change you could make.</p>
+            <p>A quick what-if: reduce one category by a fifth, and here's what it's worth over the full horizon. It deliberately targets your biggest <em>discretionary</em> category — falling back to the biggest variable one, and only then to the largest outright — because "spend 20% less on rent" isn't advice. This is the highest-leverage change you could actually make.</p>
         </div>
         <div class="insight-row positive">
             <div class="ins-header">
-                <span class="ins-num">8</span>
-                <h4>Projected End Balance</h4>
+                <span class="ins-num">12</span>
+                <h4>Projected Cash</h4>
             </div>
-            <p>Where your running balance lands at the final month of the chosen horizon, plus the delta from your starting balance. Green means you finish ahead; yellow means you end below where you started. This is the single number that summarizes whether your current trajectory is sustainable.</p>
+            <p>Where your liquid cash lands in the final month of the chosen horizon, plus the change from where you are today. Green means you finish ahead; yellow means you end below where you started. This is the single number that summarizes whether your current trajectory is sustainable.</p>
         </div>
+    </div>
+
+    <div class="callout tip">
+        <div class="callout-label">Tip — Read the panel as a checklist</div>
+        Work top to bottom once a month. Savings rate and fixed-vs-variable tell you the shape of your budget; days in the red, first shortfall, and tightest week tell you whether it survives contact with the calendar. If the second group is clean and the first is healthy, you're done — close the tab.
     </div>
 </section>
 
 <!-- ─────────────────────────────────────────── -->
-<!-- 8. Excel & JSON Export / Import -->
+<!-- 9. Excel & JSON Export / Import -->
 <!-- ─────────────────────────────────────────── -->
 <section class="guide-section" id="export">
-    <h2><span class="section-num">8</span> Excel &amp; JSON Export / Import</h2>
+    <h2><span class="section-num">9</span> Excel &amp; JSON Export / Import</h2>
 
     <p>Your data lives in your browser's LocalStorage — it persists between visits on the same browser and device. But LocalStorage can be cleared. Export regularly to keep a portable backup.</p>
 
@@ -847,23 +984,28 @@ a.kicker:hover { color: var(--accent); }
             <tr><th>Sheet</th><th>Contents</th></tr>
         </thead>
         <tbody>
-            <tr><td><code>Accounts</code></td><td>All account records — name, type, balance, as-of date</td></tr>
-            <tr><td><code>Categories</code></td><td>All categories — name, kind, color</td></tr>
-            <tr><td><code>Transactions</code></td><td>Every transaction with all fields — frequency, escalation, tags, notes, paused state</td></tr>
-            <tr><td><code>Settings</code></td><td>App settings — currency, horizon, schema version</td></tr>
-            <tr><td><code>Forecast</code></td><td>The rendered projection grid (read-only export reference)</td></tr>
+            <tr><td><code>Accounts</code></td><td>Every account — id, name, type, starting balance, as-of date, plus <code>apr</code> and <code>minPayment</code> for credit cards</td></tr>
+            <tr><td><code>Categories</code></td><td>Every category — id, name, kind, color</td></tr>
+            <tr><td><code>Transactions</code></td><td>Every transaction with all its fields — kind, amount, category, account (and from-account for transfers), frequency, custom interval, start and end dates, escalation, tags, notes, paused state</td></tr>
+            <tr><td><code>Settings</code></td><td>Schema version, currency, the global forecast horizon, and <em>one row per per-chart horizon override</em> — so a re-import restores the same view you left, not just the same numbers</td></tr>
+            <tr><td><code>Forecast</code></td><td>A snapshot of the projection: one row per transaction (name, its category, a column per month, and a total), then the income, expense, net cash flow and closing balance summary rows</td></tr>
         </tbody>
     </table>
 
+    <p>The first four sheets are what get read back on import. The <code>Forecast</code> sheet is a rendered snapshot for reading and charting in Excel — it's written on export and ignored on import, since the app recalculates the projection from your accounts and transactions every time.</p>
+
     <div class="callout warn">
         <div class="callout-label">Important — Replace-all import</div>
-        Importing a file — Excel or JSON — <strong>completely replaces</strong> everything in your browser with the contents of the file. A confirmation dialog warns you before anything is overwritten. This is intentional: the file is the source of truth. Always export before importing if you want to preserve current data.
+        Importing a file — Excel or JSON — <strong>completely replaces</strong> everything in your browser with the contents of the file. A confirmation dialog warns you first, and the message afterwards offers <strong>Undo</strong> if you've changed your mind. This is intentional: the file is the source of truth. Nothing in a file is taken on trust either — every field is checked, and if anything had to be skipped or repaired (a row with no name, an end date before its start date) you get an "Import notes" summary saying exactly what.
     </div>
 
     <p>To edit amounts in Excel and re-import: export → open the <code>Transactions</code> sheet → change any amount, frequency, or date → save → import the file back. Every change ripples through the forecast and charts immediately.</p>
 
     <h3>JSON ({ JSON } / ⇪ JSON)</h3>
     <p>A lighter alternative to Excel — a single <code>.json</code> file containing all your state. Useful for quickly transferring data between browsers or devices, or sharing a budget template with someone else. Same replace-all import semantics apply.</p>
+
+    <h3>The export-age indicator</h3>
+    <p>The app keeps track of when you last exported and shows it in the header — <em>Exported today</em>, <em>Exported 12d ago</em>, or <em>Never exported</em>. If it's been more than a month and you have data worth losing, it says so and offers both export buttons on the spot. It's the one nag in the app, and it's there because a cleared browser takes an un-exported budget with it.</p>
 
     <div class="callout tip">
         <div class="callout-label">Tip — Regular backups</div>
@@ -872,10 +1014,42 @@ a.kicker:hover { color: var(--accent); }
 </section>
 
 <!-- ─────────────────────────────────────────── -->
-<!-- 9. Pro Tips -->
+<!-- 10. Settings & Housekeeping -->
+<!-- ─────────────────────────────────────────── -->
+<section class="guide-section" id="settings">
+    <h2><span class="section-num">10</span> Settings &amp; Housekeeping</h2>
+
+    <p>Everything the app can be configured with lives in the header bar. There is no settings page, no account, and nothing to sign in to.</p>
+
+    <h3>Currency</h3>
+    <p>The currency dropdown covers <strong>USD, EUR, GBP, CAD, AUD, and JPY</strong>, and it changes how every number in the app is <em>formatted</em> — the symbol, the separators, and the decimal places your locale expects. It does not convert anything: switching from USD to EUR turns <code>$1,234.56</code> into <code>€1,234.56</code>, not into today's exchange rate. Pick the currency you actually budget in and enter your amounts in that currency.</p>
+
+    <h3>Forecast horizon</h3>
+    <p>The horizon dropdown next to it sets the length of the forecast for the grid and every chart at once. <strong>End of Year</strong> is the months remaining in the current calendar year, which shrinks as the year goes on — useful in January, less so in December. Individual charts can override it; see the <a href="#charts">Charts</a> section.</p>
+
+    <h3>Collapsible sections</h3>
+    <p>Categories, Transactions, Forecast, and Visualizations each have a <strong>▾</strong> toggle in their header. Collapse the ones you're not working on — with sixty transactions and six charts on one page, collapsing Transactions to study the forecast grid makes a real difference.</p>
+
+    <h3>Where your data lives</h3>
+    <p>Everything is saved to your browser's LocalStorage, automatically, a moment after each change. That storage is tied to <em>this browser on this device</em>: your budget won't follow you to a different browser, a different machine, or a private window, and clearing site data removes it. Moving between devices is what the JSON export is for.</p>
+
+    <h3>Undo</h3>
+    <p>Deleting an account, a category, or a transaction puts a message at the top of the app with an <strong>Undo</strong> button next to it. One click puts everything back exactly as it was, including any transactions that were reassigned as part of the delete. It's a single level of undo — the last destructive action, not a full history — so use it while the message is still on screen.</p>
+
+    <h3>Reset</h3>
+    <p>The trash icon in the header clears your data after a confirmation dialog. It removes every account and every transaction and returns your settings to their defaults — and it <strong>restores the 18 default categories</strong>, including any you had renamed or deleted. It's a clean slate, not an empty one. Export first if there's anything you'd want back.</p>
+
+    <div class="callout warn">
+        <div class="callout-label">Important — Export is your only backup</div>
+        There is no cloud copy of your budget, because there is no cloud. If LocalStorage gets cleared and you have no exported file, the data is gone. Export to Excel or JSON after any session where you changed something that mattered.
+    </div>
+</section>
+
+<!-- ─────────────────────────────────────────── -->
+<!-- 11. Pro Tips -->
 <!-- ─────────────────────────────────────────── -->
 <section class="guide-section" id="tips">
-    <h2><span class="section-num">9</span> Pro Tips</h2>
+    <h2><span class="section-num">11</span> Pro Tips</h2>
 
     <div class="tips-grid">
         <div class="tip-card">

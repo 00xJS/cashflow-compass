@@ -1,5 +1,71 @@
+# ============================================================================
+#  Cashflow Compass — Netlify configuration
+#
+#  DEPLOY HAZARD (known, deliberately not fixed in this pass)
+#  ----------------------------------------------------------------------------
+#  publish is "." — the repository root — so a *drag-and-drop* deploy uploads
+#  every file sitting in the folder, not just the ones the site needs. That
+#  includes THEME-HANDOFF.md (marked "Local only — gitignored"), the .claude/
+#  tooling directory, and the entire .git/ history. A Git-backed deploy never
+#  sees them because .gitignore excludes them; a manual folder drop does not
+#  consult .gitignore at all.
+#
+#  The proper fix is to move the shipping files into a publish subfolder
+#  (publish = "site") so nothing else can ride along. That is a path move, and
+#  it was deferred to avoid renaming files while other work is in flight.
+#
+#  Until then the redirects below return 404 for those paths, so the files are
+#  unreadable even when they have been uploaded. Note this is a mitigation, not
+#  the fix: the bytes are still on the CDN, they are just not served.
+# ============================================================================
+
 [build]
   publish = "."
+
+# force = true is required: without it these rules only apply when no file
+# matches, which is exactly the case that needs blocking. `to` is mandatory in a
+# redirect rule; with status = 404 the target is what gets rendered as the error
+# body, so it points at a page that is public anyway.
+[[redirects]]
+  from = "/THEME-HANDOFF.md"
+  to = "/index.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/.claude/*"
+  to = "/index.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/.git/*"
+  to = "/index.html"
+  status = 404
+  force = true
+
+# ----------------------------------------------------------------------------
+#  Content-Security-Policy — the privacy promise, machine-enforced
+#
+#  Both libraries (Chart.js, SheetJS) are vendored under vendor/, so the app
+#  needs nothing external and every fetch directive can be locked to 'self'.
+#
+#  style-src needs 'unsafe-inline': index.html carries its whole stylesheet in an
+#  inline <style> block, and both index.html and app.js write style="" attributes
+#  that interpolate category colours. script-src does NOT need it — every script
+#  in index.html is a <script src>, and there are no inline event handlers.
+#
+#  connect-src is 'self', not 'none'. sw.js is served from this origin and so
+#  inherits this policy; inside a service worker, connect-src governs the
+#  worker's own fetch() and Cache API adds. 'none' would break both precaching
+#  and the cache-miss fallback, leaving the worker unable to install. 'self'
+#  keeps the guarantee that matters — no request may leave this origin — while
+#  letting the shell cache itself.
+#
+#  worker-src/manifest-src are stated explicitly rather than inherited from
+#  default-src, so that tightening default-src later cannot silently break
+#  service worker registration or the manifest fetch.
+# ----------------------------------------------------------------------------
 
 [[headers]]
   for = "/*"
@@ -7,3 +73,4 @@
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "no-referrer"
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'"

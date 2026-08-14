@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Cashflow Compass — a free, offline personal cashflow forecaster. Model accounts, income and recurring expenses up to 36 months ahead. Everything stays in your browser.">
+<!-- Referrer-Policy also ships as a Netlify header; this meta covers file:// and self-hosted use. -->
+<meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0a0d1c">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧭</text></svg>">
 <title>Cashflow Compass</title>
 <script src="vendor/chart.umd.min.js"></script>
@@ -24,7 +28,8 @@
     /* text */
     --text: #e8eaf6;
     --muted: #9ba1c5;
-    --faint: #6c7299;
+    /* --faint must clear WCAG AA (4.5:1) at 10px on --card, --bg-raised and --card-chrome. */
+    --faint: #8087ad;
 
     /* accents */
     --accent: #ff9a44;
@@ -56,6 +61,8 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
 
 body {
     font-family: var(--font-sans);
@@ -94,7 +101,40 @@ a:focus-visible, button:focus-visible {
 }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
+    html, body, .table-wrap, .forecast-wrap { scroll-behavior: auto; }
 }
+
+/* ── Skip link & screen-reader utilities ── */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+.skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 200;
+    padding: 10px 16px;
+    background: var(--accent);
+    color: var(--btn-ink);
+    font-weight: 700;
+    font-size: 13.5px;
+    border-radius: 0 0 var(--radius-control) 0;
+    text-decoration: none;
+}
+.skip-link:focus {
+    left: 0;
+    color: var(--btn-ink);
+}
+main:focus { outline: none; }
 
 .container {
     max-width: 1240px;
@@ -145,6 +185,71 @@ h1 {
 .header-controls button {
     height: 36px;
 }
+
+/* Status / error strips: must collapse completely while app.js leaves them empty. */
+#statusRegion {
+    flex-basis: 100%;
+    order: 99;
+}
+#statusRegion:empty { display: none; }
+#statusRegion > * {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-control);
+    background: var(--bg-raised);
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+#globalError:empty,
+#dataWarnings:empty { display: none; }
+#globalError {
+    background: var(--down-tint);
+    border: 1px solid var(--down);
+    border-left: 4px solid var(--down);
+    border-radius: var(--radius-card);
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    color: var(--text);
+    font-size: 13.5px;
+}
+#globalError strong { color: var(--down); }
+#dataWarnings {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--warn);
+    border-radius: var(--radius-card);
+    padding: 12px 16px;
+    margin-bottom: 18px;
+    color: var(--muted);
+    font-size: 13px;
+}
+#dataWarnings strong { color: var(--warn); }
+#dataWarnings ul { margin: 6px 0 0; padding-left: 18px; }
+#dataWarnings li { margin-bottom: 2px; }
+
+noscript .noscript-banner {
+    display: block;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--warn);
+    border-radius: var(--radius-card);
+    padding: 16px 20px;
+    margin-bottom: 18px;
+    font-size: 13.5px;
+    color: var(--muted);
+}
+noscript .noscript-banner h2 {
+    margin: 0 0 6px;
+    font-size: 1.05rem;
+    color: var(--warn);
+}
+noscript .noscript-banner p { margin: 0 0 6px; }
+noscript .noscript-banner p:last-child { margin-bottom: 0; }
 
 /* ── Buttons ── */
 button {
@@ -261,10 +366,31 @@ input:focus, select:focus, textarea:focus {
     align-items: center;
     flex-wrap: wrap;
 }
+/* Inline validation slots — empty by default, so they must not reserve space. */
+.field-error {
+    display: block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    line-height: 1.35;
+    color: var(--down);
+}
+.field-error:empty { display: none; }
+input[aria-invalid="true"],
+select[aria-invalid="true"] {
+    border-color: var(--down);
+}
+input[aria-invalid="true"]:focus,
+select[aria-invalid="true"]:focus {
+    border-color: var(--down);
+    box-shadow: 0 0 0 3px var(--down-tint);
+}
 
 /* ── Tables ── */
+/* overflow-y is what gives the sticky <th> a scroll container to stick inside. */
 .table-wrap {
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 460px;
     border-radius: var(--radius-control);
     border: 1px solid var(--border);
     background: var(--card);
@@ -298,6 +424,8 @@ td.num { font-family: var(--font-mono); font-size: 12.5px; }
 th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--accent); }
 th.sortable .ind { margin-left: 4px; font-size: 10px; }
+/* Overrides the inline opacity app.js stamps on the inactive ↕ glyph (was ~1.4:1). */
+th.sortable .ind span[style*="opacity"] { opacity: 0.9 !important; }
 .tag {
     display: inline-flex;
     align-items: center;
@@ -406,6 +534,7 @@ th.sortable .ind { margin-left: 4px; font-size: 10px; }
 }
 .chart-head {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
     gap: 10px;
@@ -430,6 +559,9 @@ th.sortable .ind { margin-left: 4px; font-size: 10px; }
     height: 26px;
 }
 .chart-card canvas {
+    display: block;
+    width: 100%;
+    min-height: 260px;
     max-height: 300px;
 }
 
@@ -504,6 +636,13 @@ footer.app-foot a:hover { color: var(--accent-deep); text-decoration: underline;
 }
 .modal h3 { margin: 0 0 12px; color: var(--text); }
 .modal p { margin: 0 0 16px; }
+/* app.js gives the dialog tabindex="-1" and focuses it; never show a ring for that. */
+.modal:focus { outline: none; }
+.modal :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
 
 /* ── Responsive ── */
 @media (max-width: 700px) {
@@ -512,7 +651,130 @@ footer.app-foot a:hover { color: var(--accent-deep); text-decoration: underline;
     h1 { font-size: 1.4rem; }
     .header-controls { width: 100%; justify-content: flex-start; }
     .charts-grid { grid-template-columns: 1fr; }
+    .chart-card { padding: 12px 12px; }
+    .chart-card canvas { min-height: 210px; max-height: 260px; }
     th, td { padding: 7px 8px; }
+
+    /* A 220px pinned label column leaves ~90px for data on a 320px screen. */
+    .forecast-wrap {
+        max-height: 420px;
+    }
+    .forecast-wrap th:first-child,
+    .forecast-wrap td:first-child {
+        min-width: 104px;
+        max-width: 132px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        text-overflow: clip;
+    }
+
+    /* Without this the row-action column sits far off the right edge. */
+    .table-wrap {
+        max-height: 380px;
+    }
+    .table-wrap th:last-child,
+    .table-wrap td:last-child {
+        position: sticky;
+        right: 0;
+        z-index: 2;
+        background: var(--card);
+        border-left: 2px solid var(--border);
+    }
+    .table-wrap thead th:last-child {
+        background: var(--card-chrome);
+        z-index: 3;
+    }
+    .table-wrap tbody tr:hover td:last-child { background: var(--bg-raised); }
+
+    .row-actions { gap: 8px; }
+    .row-actions button,
+    .row-actions button.icon {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 8px 10px;
+    }
+}
+
+/* Touch pointers need 44px targets at any viewport width. */
+@media (hover: none) and (pointer: coarse) {
+    .row-actions { gap: 8px; }
+    .row-actions button,
+    .row-actions button.icon {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 8px 10px;
+    }
+}
+
+/* ── Print ── */
+@media print {
+    :root {
+        color-scheme: light;
+        --bg: #ffffff;
+        --bg-raised: #ffffff;
+        --card: #ffffff;
+        --card-chrome: #f0f0f0;
+        --border: #b4b4b4;
+        --text: #111111;
+        --muted: #333333;
+        --faint: #444444;
+        --tag-bg: transparent;
+        --tag-text: #111111;
+        --shadow: none;
+        --down-tint: transparent;
+    }
+    body {
+        background: #ffffff;
+        color: #111111;
+        padding: 0;
+    }
+    body::before { display: none; }
+
+    .skip-link,
+    .header-controls,
+    .intro-banner,
+    #statusRegion,
+    #dataWarnings,
+    form,
+    button,
+    .row-actions,
+    #section-charts { display: none !important; }
+
+    header.app-head { border-bottom: 1px solid #b4b4b4; }
+    section.card {
+        box-shadow: none;
+        border: 1px solid #b4b4b4;
+        padding: 10px 12px;
+        margin-bottom: 12px;
+    }
+
+    /* Expand the scrollers so every month and every row reaches the paper. */
+    .forecast-wrap,
+    .table-wrap {
+        max-height: none;
+        overflow: visible;
+        border: none;
+    }
+    .forecast-wrap th:first-child,
+    .forecast-wrap td:first-child,
+    .table-wrap th:last-child,
+    .table-wrap td:last-child {
+        position: static;
+        min-width: 0;
+        max-width: none;
+    }
+    table { font-size: 9px; }
+    th, td { padding: 3px 5px; white-space: normal; }
+    th { position: static; background: #f0f0f0; color: #111111; }
+    thead { display: table-header-group; }
+    tr, .insight-card { break-inside: avoid; page-break-inside: avoid; }
+    tbody tr:hover { background: transparent; }
+    .forecast-wrap td.negative,
+    .forecast-wrap td.positive,
+    .forecast-wrap td.balance-neg,
+    .forecast-wrap tr.balance-row td { color: #111111; background: transparent; }
+    .tag { color: #111111; border-color: #b4b4b4; background: transparent; }
+    a { color: #111111; text-decoration: none; }
 }
 
 .hidden { display: none !important; }
@@ -553,6 +815,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <div class="container">
 
 <header class="app-head">
@@ -562,6 +825,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
         <p class="tagline">Navigate your cashflow — up to 36 months out <span style="white-space:nowrap">&nbsp;|&nbsp;<a href="guide.html" class="guide-link">How to get Started →</a></span></p>
     </div>
     <div class="header-controls">
+        <label class="visually-hidden" for="currencySelect">Currency</label>
         <select id="currencySelect" title="Currency">
             <option value="USD">$ USD</option>
             <option value="EUR">€ EUR</option>
@@ -570,6 +834,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
             <option value="AUD">$ AUD</option>
             <option value="JPY">¥ JPY</option>
         </select>
+        <label class="visually-hidden" for="horizonSelect">Forecast horizon</label>
         <select id="horizonSelect" title="Forecast horizon">
             <option value="eoy">End of Year</option>
             <option value="12">12 months</option>
@@ -581,10 +846,25 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
         <button id="importXlsxBtn">⬆ Excel</button>
         <button id="exportJsonBtn" class="ghost" title="Export JSON">{ JSON }</button>
         <button id="importJsonBtn" class="ghost" title="Import JSON">⇪ JSON</button>
+        <button id="loadSampleBtn" type="button" class="ghost load-sample">Load sample data</button>
         <button id="resetBtn" class="ghost icon danger" title="Reset all">🗑</button>
         <input type="file" id="fileInput" accept=".xlsx,.xls,.json" class="hidden">
+        <div id="statusRegion" aria-live="polite" role="status"></div>
     </div>
 </header>
+
+<main id="main" tabindex="-1">
+
+<noscript>
+    <div class="noscript-banner">
+        <h2>JavaScript is required</h2>
+        <p>Cashflow Compass builds every forecast, table and chart locally in your browser using JavaScript. With scripting turned off the page below is empty chrome — nothing will calculate and nothing can be saved.</p>
+        <p>Enable JavaScript for this page and reload. Nothing is sent anywhere: there is no server, no account and no network call.</p>
+    </div>
+</noscript>
+
+<!-- Fatal-error banner; app.js fills it, and :empty keeps it out of the flow otherwise. -->
+<div id="globalError"></div>
 
 <!-- Empty-state intro banner (shown only when no accounts and no transactions) -->
 <div class="intro-banner hidden" id="introBanner">
@@ -599,8 +879,8 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
         <p class="muted-text">All data stays in your browser. Export to Excel any time as a portable backup.</p>
     </div>
     <div class="intro-actions">
-        <button class="primary" id="loadSampleBtn">Load sample data</button>
-        <button class="ghost" id="dismissIntroBtn">Hide</button>
+        <button class="primary load-sample" type="button" id="introLoadSampleBtn">Load sample data</button>
+        <button class="ghost" type="button" id="dismissIntroBtn">Hide</button>
     </div>
 </div>
 
@@ -609,11 +889,12 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
     <h2>Accounts <span class="section-meta" id="accountsMeta"></span></h2>
     <form id="accountForm" class="form-grid">
         <div>
-            <label>Name</label>
-            <input type="text" id="acctName" placeholder="e.g., Chase Checking" required>
+            <label for="acctName">Name</label>
+            <input type="text" id="acctName" placeholder="e.g., Chase Checking" aria-describedby="acctNameError" required>
+            <span class="field-error" id="acctNameError" role="alert"></span>
         </div>
         <div>
-            <label>Type</label>
+            <label for="acctType">Type</label>
             <select id="acctType">
                 <option value="checking">Checking</option>
                 <option value="savings">Savings</option>
@@ -623,11 +904,11 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
             </select>
         </div>
         <div>
-            <label>Starting Balance</label>
+            <label for="acctBalance">Starting Balance</label>
             <input type="number" id="acctBalance" step="0.01" value="0">
         </div>
         <div>
-            <label>As of Date</label>
+            <label for="acctAsOf">As of Date</label>
             <input type="date" id="acctAsOf" required>
         </div>
         <div class="full form-actions">
@@ -656,16 +937,17 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-categories">
     <h2>
         Categories
-        <button class="ghost icon" id="catToggle">▾</button>
+        <button class="ghost icon" type="button" id="catToggle" aria-expanded="true" aria-controls="catBody"><span class="visually-hidden">Toggle categories section</span>▾</button>
     </h2>
     <div id="catBody">
         <form id="categoryForm" class="form-grid">
             <div>
-                <label>Name</label>
-                <input type="text" id="catName" placeholder="e.g., Groceries" required>
+                <label for="catName">Name</label>
+                <input type="text" id="catName" placeholder="e.g., Groceries" aria-describedby="catNameError" required>
+                <span class="field-error" id="catNameError" role="alert"></span>
             </div>
             <div>
-                <label>Kind</label>
+                <label for="catKind">Kind</label>
                 <select id="catKind">
                     <option value="income">Income</option>
                     <option value="fixed">Fixed Expense</option>
@@ -677,7 +959,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
                 </select>
             </div>
             <div>
-                <label>Color</label>
+                <label for="catColor">Color</label>
                 <input type="color" id="catColor" value="#ff9a44">
             </div>
             <div class="form-actions">
@@ -698,16 +980,17 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-transactions">
     <h2>
         <span>Transactions <span class="section-meta" id="txMeta"></span></span>
-        <button class="ghost icon" id="txToggle" aria-expanded="true">▾</button>
+        <button class="ghost icon" type="button" id="txToggle" aria-expanded="true" aria-controls="txBody"><span class="visually-hidden">Toggle transactions section</span>▾</button>
     </h2>
     <div id="txBody">
     <form id="txForm" class="form-grid">
         <div>
-            <label>Name</label>
-            <input type="text" id="txName" placeholder="e.g., Paycheck" required>
+            <label for="txName">Name</label>
+            <input type="text" id="txName" placeholder="e.g., Paycheck" aria-describedby="txNameError" required>
+            <span class="field-error" id="txNameError" role="alert"></span>
         </div>
         <div>
-            <label>Kind</label>
+            <label for="txKind">Kind</label>
             <select id="txKind">
                 <option value="income">Income</option>
                 <option value="expense">Expense</option>
@@ -715,23 +998,24 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
             </select>
         </div>
         <div>
-            <label>Amount</label>
-            <input type="number" id="txAmount" step="0.01" placeholder="0.00" required>
+            <label for="txAmount">Amount</label>
+            <input type="number" id="txAmount" min="0.01" step="0.01" placeholder="0.00" aria-describedby="txAmountError" required>
+            <span class="field-error" id="txAmountError" role="alert"></span>
         </div>
         <div>
-            <label>Category</label>
+            <label for="txCategory">Category</label>
             <select id="txCategory"></select>
         </div>
         <div>
-            <label>Account</label>
+            <label for="txAccount">Account</label>
             <select id="txAccount"></select>
         </div>
         <div id="txFromAccountWrap" class="hidden">
-            <label>From Account (transfer)</label>
+            <label for="txFromAccount">From Account (transfer)</label>
             <select id="txFromAccount"></select>
         </div>
         <div>
-            <label>Frequency</label>
+            <label for="txFrequency">Frequency</label>
             <select id="txFrequency">
                 <option value="one-time">One-time</option>
                 <option value="weekly">Weekly</option>
@@ -745,34 +1029,40 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
             </select>
         </div>
         <div id="txCustomWrap" class="hidden">
-            <label>Every</label>
+            <label for="txCustomN">Every</label>
             <div style="display:flex;gap:6px;">
-                <input type="number" id="txCustomN" min="1" value="1" style="width:70px;">
+                <input type="number" id="txCustomN" min="1" step="1" value="1" style="width:70px;" aria-describedby="txCustomNError">
+                <label class="visually-hidden" for="txCustomUnit">Custom interval unit</label>
                 <select id="txCustomUnit">
                     <option value="days">days</option>
                     <option value="weeks">weeks</option>
                     <option value="months">months</option>
                 </select>
             </div>
+            <span class="field-error" id="txCustomNError" role="alert"></span>
         </div>
         <div>
-            <label>Start Date</label>
-            <input type="date" id="txStart" required>
+            <label for="txStart">Start Date</label>
+            <input type="date" id="txStart" aria-describedby="txStartError" required>
+            <span class="field-error" id="txStartError" role="alert"></span>
         </div>
         <div>
-            <label>End Date (optional)</label>
-            <input type="date" id="txEnd">
+            <!-- app.js keeps min in sync with txStart so the picker cannot offer an end before the start. -->
+            <label for="txEnd">End Date (optional)</label>
+            <input type="date" id="txEnd" min="" aria-describedby="txEndError">
+            <span class="field-error" id="txEndError" role="alert"></span>
         </div>
         <div>
-            <label>Annual Escalation %</label>
-            <input type="number" id="txEscalation" step="0.01" value="0" title="e.g., 3 = 3% bump every 12 months from start">
+            <label for="txEscalation">Annual Escalation %</label>
+            <input type="number" id="txEscalation" min="-100" max="100" step="0.01" value="0" title="e.g., 3 = 3% bump every 12 months from start" aria-describedby="txEscalationError">
+            <span class="field-error" id="txEscalationError" role="alert"></span>
         </div>
         <div class="full">
-            <label>Tags (comma separated)</label>
+            <label for="txTags">Tags (comma separated)</label>
             <input type="text" id="txTags" placeholder="e.g., kid, work-reimbursable">
         </div>
         <div class="full">
-            <label>Notes</label>
+            <label for="txNotes">Notes</label>
             <input type="text" id="txNotes">
         </div>
         <div class="full form-actions">
@@ -785,11 +1075,11 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 
     <div class="form-grid" style="margin-top:8px;">
         <div>
-            <label>Search</label>
+            <label for="txSearch">Search</label>
             <input type="text" id="txSearch" placeholder="Filter by name, tag, notes…">
         </div>
         <div>
-            <label>Filter by Kind</label>
+            <label for="txFilterKind">Filter by Kind</label>
             <select id="txFilterKind">
                 <option value="">All</option>
                 <option value="income">Income</option>
@@ -798,7 +1088,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
             </select>
         </div>
         <div>
-            <label>Filter by Category</label>
+            <label for="txFilterCategory">Filter by Category</label>
             <select id="txFilterCategory"><option value="">All</option></select>
         </div>
     </div>
@@ -812,11 +1102,14 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
     </div>
 </section>
 
+<!-- Data-quality warning strip; app.js fills it, :empty keeps it out of the flow otherwise. -->
+<div id="dataWarnings"></div>
+
 <!-- Forecast -->
 <section class="card" id="section-forecast">
     <h2>
         <span><span id="forecastTitle">12-Month Forecast</span> <span class="section-meta" id="forecastMeta"></span></span>
-        <button class="ghost icon" id="forecastToggle" aria-expanded="true">▾</button>
+        <button class="ghost icon" type="button" id="forecastToggle" aria-expanded="true" aria-controls="forecastBody"><span class="visually-hidden">Toggle forecast section</span>▾</button>
     </h2>
     <div id="forecastBody">
         <div class="forecast-wrap">
@@ -832,50 +1125,56 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-charts">
     <h2>
         <span>Visualizations</span>
-        <button class="ghost icon" id="chartsToggle" aria-expanded="true">▾</button>
+        <button class="ghost icon" type="button" id="chartsToggle" aria-expanded="true" aria-controls="chartsGrid"><span class="visually-hidden">Toggle visualizations section</span>▾</button>
     </h2>
     <div class="charts-grid" id="chartsGrid">
         <div class="chart-card" data-chart-card="monthly">
             <div class="chart-head">
                 <h3>Monthly Income vs Expenses<span class="h-range" id="range-monthly"></span></h3>
-                <select class="chart-horizon" data-chart="monthly"></select>
+                <label class="visually-hidden" for="horizon-monthly">Horizon for Monthly Income vs Expenses</label>
+                <select class="chart-horizon" id="horizon-monthly" data-chart="monthly"></select>
             </div>
-            <canvas id="chartMonthly"></canvas>
+            <canvas id="chartMonthly" role="img" aria-label="Bar chart of forecast income against expenses for each month in the selected horizon."></canvas>
         </div>
         <div class="chart-card" data-chart-card="balance">
             <div class="chart-head">
                 <h3>Running Balance<span class="h-range" id="range-balance"></span></h3>
-                <select class="chart-horizon" data-chart="balance"></select>
+                <label class="visually-hidden" for="horizon-balance">Horizon for Running Balance</label>
+                <select class="chart-horizon" id="horizon-balance" data-chart="balance"></select>
             </div>
-            <canvas id="chartBalance"></canvas>
+            <canvas id="chartBalance" role="img" aria-label="Line chart of the projected combined account balance at the end of each month."></canvas>
         </div>
         <div class="chart-card" data-chart-card="category">
             <div class="chart-head">
                 <h3>Spend by Category<span class="h-range" id="range-category"></span></h3>
-                <select class="chart-horizon" data-chart="category"></select>
+                <label class="visually-hidden" for="horizon-category">Horizon for Spend by Category</label>
+                <select class="chart-horizon" id="horizon-category" data-chart="category"></select>
             </div>
-            <canvas id="chartCategory"></canvas>
+            <canvas id="chartCategory" role="img" aria-label="Doughnut chart showing the share of total forecast spending taken by each expense category."></canvas>
         </div>
         <div class="chart-card" data-chart-card="trend">
             <div class="chart-head">
                 <h3>Category Trend (stacked)<span class="h-range" id="range-trend"></span></h3>
-                <select class="chart-horizon" data-chart="trend"></select>
+                <label class="visually-hidden" for="horizon-trend">Horizon for Category Trend</label>
+                <select class="chart-horizon" id="horizon-trend" data-chart="trend"></select>
             </div>
-            <canvas id="chartTrend"></canvas>
+            <canvas id="chartTrend" role="img" aria-label="Stacked area chart of spending per category month by month across the selected horizon."></canvas>
         </div>
         <div class="chart-card" data-chart-card="top">
             <div class="chart-head">
                 <h3>Top 10 Costs<span class="h-range" id="range-top"></span></h3>
-                <select class="chart-horizon" data-chart="top"></select>
+                <label class="visually-hidden" for="horizon-top">Horizon for Top 10 Costs</label>
+                <select class="chart-horizon" id="horizon-top" data-chart="top"></select>
             </div>
-            <canvas id="chartTop"></canvas>
+            <canvas id="chartTop" role="img" aria-label="Horizontal bar chart ranking the ten most expensive recurring transactions over the selected horizon."></canvas>
         </div>
         <div class="chart-card" data-chart-card="income">
             <div class="chart-head">
                 <h3>Income Sources<span class="h-range" id="range-income"></span></h3>
-                <select class="chart-horizon" data-chart="income"></select>
+                <label class="visually-hidden" for="horizon-income">Horizon for Income Sources</label>
+                <select class="chart-horizon" id="horizon-income" data-chart="income"></select>
             </div>
-            <canvas id="chartIncome"></canvas>
+            <canvas id="chartIncome" role="img" aria-label="Doughnut chart showing the share of total forecast income contributed by each income source."></canvas>
         </div>
     </div>
 </section>
@@ -885,6 +1184,8 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
     <h2>Interesting Facts &amp; Insights</h2>
     <div class="insights-grid" id="insightsGrid"></div>
 </section>
+
+</main>
 
 <footer class="app-foot">
     <p>

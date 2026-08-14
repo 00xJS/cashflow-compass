@@ -1,0 +1,2103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0d1c">
+<title>Cashflow Compass — engine tests</title>
+<style>
+/* ===== Observation Deck design tokens (dark only) ===== */
+:root {
+    color-scheme: dark;
+
+    --bg: #0a0d1c;
+    --bg-raised: #10142e;
+    --card: #12163a;
+    --card-chrome: #0c0f26;
+    --border: rgba(255, 255, 255, 0.09);
+
+    --text: #e8eaf6;
+    --muted: #9ba1c5;
+    --faint: #6c7299;
+
+    --accent: #ff9a44;
+    --pass: #3ddc84;
+    --fail: #ff6b6b;
+    --skip: #ffc24b;
+
+    --pass-tint: rgba(61, 220, 132, 0.10);
+    --fail-tint: rgba(255, 107, 107, 0.12);
+    --skip-tint: rgba(255, 194, 75, 0.10);
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+    --radius-card: 12px;
+    --radius-control: 8px;
+    --radius-pill: 999px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 32px 20px 80px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 980px; margin: 0 auto; }
+
+/* ── header ── */
+.kicker {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    text-decoration: none;
+    margin-bottom: 6px;
+}
+.kicker:hover { text-decoration: underline; }
+h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.01em; }
+.tagline { margin: 0 0 22px; color: var(--muted); font-size: 14px; }
+.tagline code { font-family: var(--font-mono); font-size: 12.5px; color: var(--text); }
+
+/* ── banner ── */
+.banner {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    background: var(--card-chrome);
+    border-radius: var(--radius-control);
+    padding: 12px 16px;
+    margin-bottom: 18px;
+    color: var(--muted);
+    font-size: 13.5px;
+}
+.banner strong { color: var(--text); }
+.banner code {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--accent);
+    background: rgba(255, 154, 68, 0.08);
+    border-radius: 4px;
+    padding: 1px 5px;
+}
+.banner.bad { border-left-color: var(--fail); }
+
+/* ── summary ── */
+.summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: stretch;
+    margin-bottom: 14px;
+}
+.tile {
+    flex: 1 1 130px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    padding: 12px 14px;
+}
+.tile .n {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 26px;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+}
+.tile .k {
+    display: block;
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-top: 4px;
+}
+.tile.ok    .n { color: var(--pass); }
+.tile.bad   .n { color: var(--fail); }
+.tile.warn  .n { color: var(--skip); }
+.tile.total .n { color: var(--text); }
+.tile.time  .n { color: var(--muted); font-size: 20px; padding-top: 5px; }
+
+.verdict {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    border-radius: var(--radius-pill);
+    padding: 6px 14px;
+    display: inline-block;
+    margin-bottom: 16px;
+}
+.verdict.ok  { background: var(--pass-tint); color: var(--pass); border: 1px solid rgba(61, 220, 132, 0.35); }
+.verdict.bad { background: var(--fail-tint); color: var(--fail); border: 1px solid rgba(255, 107, 107, 0.4); }
+
+/* ── controls ── */
+.controls {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    margin-bottom: 22px;
+    font-size: 13px;
+    color: var(--muted);
+}
+.controls label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.controls input[type="checkbox"] { accent-color: var(--accent); }
+.controls button {
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--bg);
+    background: var(--accent);
+    border: 0;
+    border-radius: var(--radius-control);
+    padding: 6px 14px;
+    cursor: pointer;
+}
+.controls button:hover { background: #ffab63; }
+
+/* ── suites ── */
+.suite {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    margin-bottom: 14px;
+    overflow: hidden;
+}
+.suite-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 13px 16px;
+    background: var(--card-chrome);
+    border-bottom: 1px solid var(--border);
+}
+.suite-head h2 { font-size: 14px; margin: 0; letter-spacing: 0.01em; flex: 1; }
+.suite-count {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--faint);
+    white-space: nowrap;
+}
+.suite-count .p { color: var(--pass); }
+.suite-count .f { color: var(--fail); }
+.suite-count .s { color: var(--skip); }
+.suite-note {
+    margin: 0;
+    padding: 10px 16px 0;
+    font-size: 12.5px;
+    color: var(--faint);
+}
+.cases { list-style: none; margin: 0; padding: 6px 0; }
+.case {
+    display: grid;
+    grid-template-columns: 22px 1fr auto;
+    gap: 10px;
+    padding: 6px 16px;
+    align-items: baseline;
+    font-size: 13.5px;
+}
+.case + .case { border-top: 1px solid rgba(255, 255, 255, 0.035); }
+.case .mark { font-family: var(--font-mono); font-weight: 700; }
+.case.pass .mark { color: var(--pass); }
+.case.fail .mark { color: var(--fail); }
+.case.skip .mark { color: var(--skip); }
+.case.fail { background: var(--fail-tint); }
+.case.skip { background: var(--skip-tint); }
+.case .ms {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+}
+.detail {
+    grid-column: 2 / -1;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-top: 4px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.28);
+}
+.case.fail .detail { color: #ffb4b4; }
+.case.skip .detail { color: #ffdc9a; }
+
+body.fails-only .case.pass { display: none; }
+body.fails-only .suite.all-pass { display: none; }
+
+footer {
+    max-width: 980px;
+    margin: 32px auto 0;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    color: var(--faint);
+    font-size: 12px;
+}
+footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+    <a class="kicker" href="index.html">Observation Deck / Cashflow Compass</a>
+    <h1>Engine test suite</h1>
+    <p class="tagline">Pure logic only — <code>engine.js</code> is loaded on its own, with no DOM, no build step and no test library.</p>
+</header>
+
+<!-- Static fallback. The runner replaces this on boot, so if it is still here
+     the page's inline script never executed. -->
+<div id="banner" class="banner bad">
+    <strong>The suite has not run.</strong> If this message stays put, the inline script on this
+    page was blocked — the deployed site sends <code>script-src 'self'</code>, which is correct for
+    the app and does block this page. Run the suite locally instead:
+    <code>python3 -m http.server</code> in the project folder, then open
+    <code>http://localhost:8000/tests.html</code>.
+</div>
+
+<div id="verdict"></div>
+<div id="summary" class="summary"></div>
+
+<div class="controls">
+    <label><input type="checkbox" id="failsOnly"> Show failures &amp; skips only</label>
+    <button id="rerun" type="button">Re-run</button>
+</div>
+
+<main id="results"></main>
+
+<footer>
+    Cashflow Compass runs entirely on this machine. Nothing here contacts a network, and the
+    constraint-guard section below exists to keep that true. &middot; <a href="index.html">Back to the app</a>
+</footer>
+
+</div>
+
+<script src="engine.js"></script>
+<script>
+/* =========================================================
+ *  Cashflow Compass — engine test suite
+ *  No libraries, no build step, no network (except the
+ *  constraint guard, which reads the app's own source files
+ *  and is skipped on file://).
+ * ========================================================= */
+
+/* ───── Assertion harness ───── */
+
+const SUITES = [];
+let CURRENT = null;
+
+// Thrown by skip(). Carried through the runner so a skipped test is reported
+// as its own state rather than as a failure.
+function SkipSignal(reason) { this.reason = reason; }
+
+function describe(name, note, fn) {
+    const suite = { name: name, note: note, tests: [] };
+    SUITES.push(suite);
+    const prev = CURRENT;
+    CURRENT = suite;
+    try { fn(); } finally { CURRENT = prev; }
+}
+
+function it(name, fn) {
+    CURRENT.tests.push({ name: name, fn: fn });
+}
+
+function skip(reason) { throw new SkipSignal(reason); }
+
+function failWith(msg) { throw new Error(msg); }
+
+function assert(cond, msg) {
+    if (!cond) throw new Error(msg || 'expected a truthy value');
+}
+
+function show(v) {
+    if (v instanceof Date) return isoOf(v);
+    if (typeof v === 'string') return JSON.stringify(v);
+    if (Array.isArray(v)) return '[' + v.map(show).join(', ') + ']';
+    if (v && typeof v === 'object') {
+        try { return JSON.stringify(v); } catch (e) { return '[object]'; }
+    }
+    return String(v);
+}
+
+function assertEqual(actual, expected, msg) {
+    const a = actual instanceof Date ? isoOf(actual) : actual;
+    const e = expected instanceof Date ? isoOf(expected) : expected;
+    if (!Object.is(a, e)) {
+        throw new Error((msg ? msg + '\n  ' : '') + 'expected ' + show(e) + ', got ' + show(a));
+    }
+}
+
+function assertClose(actual, expected, tol, msg) {
+    const t = tol == null ? 1e-9 : tol;
+    if (typeof actual !== 'number' || !isFinite(actual)) {
+        throw new Error((msg ? msg + '\n  ' : '') + 'expected a finite number near ' + expected + ', got ' + show(actual));
+    }
+    if (Math.abs(actual - expected) > t) {
+        throw new Error((msg ? msg + '\n  ' : '') + 'expected ' + expected + ' (±' + t + '), got ' + actual);
+    }
+}
+
+function assertBetween(actual, lo, hi, msg) {
+    if (typeof actual !== 'number' || !isFinite(actual) || actual < lo || actual > hi) {
+        throw new Error((msg ? msg + '\n  ' : '') + 'expected a number in [' + lo + ', ' + hi + '], got ' + show(actual));
+    }
+}
+
+function assertArrayEqual(actual, expected, msg) {
+    const a = JSON.stringify(actual);
+    const e = JSON.stringify(expected);
+    if (a !== e) {
+        throw new Error((msg ? msg + '\n  ' : '') + 'expected ' + e + '\n  got      ' + a);
+    }
+}
+
+function assertThrows(fn, msg) {
+    let err = null, threw = false;
+    try { fn(); } catch (e) { threw = true; err = e; }
+    if (err instanceof SkipSignal) throw err;
+    if (!threw) throw new Error((msg ? msg + '\n  ' : '') + 'expected the call to throw, but it returned normally');
+    return err;
+}
+
+/* ───── Local date helpers ─────
+ * Deliberately independent of engine.js: expectations must not be built with
+ * the same code under test.
+ */
+
+function D(iso) {
+    const p = iso.split('-').map(Number);
+    return new Date(p[0], p[1] - 1, p[2]);
+}
+function isoOf(d) {
+    if (!(d instanceof Date)) return String(d);
+    return d.getFullYear() + '-' +
+        String(d.getMonth() + 1).padStart(2, '0') + '-' +
+        String(d.getDate()).padStart(2, '0');
+}
+function addDaysLocal(d, n) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+}
+function asDate(v) {
+    if (v == null) return null;
+    if (v instanceof Date) return v;
+    if (typeof v === 'string') return D(v.slice(0, 10));
+    if (typeof v === 'number') return new Date(v);
+    return null;
+}
+function sum(arr) { return (arr || []).reduce(function (s, n) { return s + n; }, 0); }
+
+// buildForecast() lays its month grid out from the 1st of the current month, but
+// only *scans* transactions from the balance cutoff forward — the newest account
+// asOfDate, or today when none is set — because a bill that already came out this
+// month is already inside the stated balance. Forecast tests therefore anchor on
+// today: anchoring on the 1st puts the occurrences before the cutoff, where they
+// are correctly ignored and the test proves nothing.
+function todayIso() { return isoOf(new Date()); }
+function daysFromNowIso(n) { return isoOf(addDaysLocal(new Date(), n)); }
+function monthsFromNowIso(n, day) {
+    const t = new Date();
+    return isoOf(new Date(t.getFullYear(), t.getMonth() + n, day || 1));
+}
+
+/* ───── Test-state builders ───── */
+
+let SEQ = 0;
+function nid(prefix) { return prefix + '_t' + (++SEQ); }
+
+function mkState(over) {
+    const s = {
+        schemaVersion: typeof SCHEMA_VERSION === 'number' ? SCHEMA_VERSION : 5,
+        settings: { currency: 'USD', forecastHorizon: '12', chartHorizons: {}, lastExportAt: null },
+        accounts: [],
+        categories: typeof DEFAULT_CATEGORIES !== 'undefined' ? structuredClone(DEFAULT_CATEGORIES) : [],
+        transactions: []
+    };
+    return Object.assign(s, over || {});
+}
+
+function mkAccount(over) {
+    return Object.assign({
+        id: nid('acct'),
+        name: 'Account',
+        type: 'checking',
+        startingBalance: 0,
+        asOfDate: null,
+        apr: 0,
+        minPayment: 0
+    }, over || {});
+}
+
+function mkTx(over) {
+    return Object.assign({
+        id: nid('tx'),
+        name: 'Item',
+        kind: 'expense',
+        amount: 100,
+        categoryId: 'cat_housing',
+        accountId: null,
+        fromAccountId: null,
+        frequency: 'monthly',
+        startDate: '2026-01-01',
+        endDate: null,
+        customN: 1,
+        customUnit: 'days',
+        escalation: 0,
+        tags: [],
+        notes: '',
+        paused: false
+    }, over || {});
+}
+
+// engine.js declares `let state` at the top level of a classic script, so the
+// bare identifier is shared across scripts. Never redeclare it here — assign it.
+function withState(s, fn) {
+    const prev = state;
+    state = s;
+    try { return fn(); } finally { state = prev; }
+}
+
+function occIso(tx, fromIso, toIso) {
+    return occurrences(tx, D(fromIso), D(toIso)).map(isoOf);
+}
+
+function acctOf(fc, id) {
+    assert(fc.byAccount, 'forecast.byAccount is missing — see the shared interface contract');
+    const a = fc.byAccount[id];
+    assert(a, 'forecast.byAccount has no entry for account ' + id);
+    return a;
+}
+
+/* ───── Engine surface ───── */
+
+const ENGINE_OK = typeof buildForecast === 'function' && typeof occurrences === 'function';
+
+describe('Engine surface',
+    'The names app.js and this page both depend on. A failure here explains every failure below it.',
+    function () {
+        const surface = [
+            ['SCHEMA_VERSION',     function () { return typeof SCHEMA_VERSION; }],
+            ['DEFAULT_CATEGORIES', function () { return typeof DEFAULT_CATEGORIES; }],
+            ['KIND_LABELS',        function () { return typeof KIND_LABELS; }],
+            ['applySort',          function () { return typeof applySort; }],
+            ['defaultState',       function () { return typeof defaultState; }],
+            ['migrate',            function () { return typeof migrate; }],
+            ['uid',                function () { return typeof uid; }],
+            ['parseDate',          function () { return typeof parseDate; }],
+            ['fmtDate',            function () { return typeof fmtDate; }],
+            ['addDays',            function () { return typeof addDays; }],
+            ['addMonths',          function () { return typeof addMonths; }],
+            ['startOfMonth',       function () { return typeof startOfMonth; }],
+            ['endOfMonth',         function () { return typeof endOfMonth; }],
+            ['occurrences',        function () { return typeof occurrences; }],
+            ['amountAtDate',       function () { return typeof amountAtDate; }],
+            ['annualizedCost',     function () { return typeof annualizedCost; }],
+            ['buildForecast',      function () { return typeof buildForecast; }],
+            ['fmtMoney',           function () { return typeof fmtMoney; }],
+            ['fmtPct',             function () { return typeof fmtPct; }],
+            ['computeInsights',    function () { return typeof computeInsights; }],
+            ['daysBetween',        function () { return typeof daysBetween; }],
+            ['payoffSchedule',     function () { return typeof payoffSchedule; }]
+        ];
+        surface.forEach(function (entry) {
+            it(entry[0] + ' is defined', function () {
+                assert(entry[1]() !== 'undefined', 'engine.js does not define ' + entry[0]);
+            });
+        });
+
+        it('state is a shared binding this page can assign', function () {
+            const prev = state;
+            state = mkState();
+            const seen = state;
+            state = prev;
+            assert(seen && seen.settings, 'assigning the global `state` did not take effect');
+        });
+    });
+
+/* ───── Date helpers ───── */
+
+describe('Date helpers',
+    'Calendar arithmetic the frequency engine is built on.',
+    function () {
+        it('parseDate / fmtDate round-trip without drifting', function () {
+            ['2026-01-01', '2026-02-28', '2026-12-31', '2024-02-29'].forEach(function (s) {
+                assertEqual(fmtDate(parseDate(s)), s, 'round-trip of ' + s);
+            });
+        });
+
+        it('parseDate returns a local midnight, not a UTC instant', function () {
+            const d = parseDate('2026-06-15');
+            assertEqual(d.getFullYear(), 2026);
+            assertEqual(d.getMonth(), 5);
+            assertEqual(d.getDate(), 15);
+            assertEqual(d.getHours(), 0, 'dates must be local midnight so day comparisons are stable');
+        });
+
+        it('addMonths clamps to the last day of a shorter month', function () {
+            assertEqual(isoOf(addMonths(D('2026-01-31'), 1)), '2026-02-28');
+            assertEqual(isoOf(addMonths(D('2026-03-31'), 1)), '2026-04-30');
+            assertEqual(isoOf(addMonths(D('2024-01-31'), 1)), '2024-02-29', 'leap year February');
+        });
+
+        it('addMonths crosses a year boundary', function () {
+            assertEqual(isoOf(addMonths(D('2026-11-15'), 3)), '2027-02-15');
+            assertEqual(isoOf(addMonths(D('2026-02-15'), -3)), '2025-11-15');
+        });
+
+        it('endOfMonth knows February', function () {
+            assertEqual(isoOf(endOfMonth(D('2026-02-10'))), '2026-02-28');
+            assertEqual(isoOf(endOfMonth(D('2024-02-10'))), '2024-02-29');
+            assertEqual(isoOf(endOfMonth(D('2026-12-01'))), '2026-12-31');
+        });
+
+        it('addDays crosses month and year ends', function () {
+            assertEqual(isoOf(addDays(D('2026-01-31'), 1)), '2026-02-01');
+            assertEqual(isoOf(addDays(D('2026-12-31'), 1)), '2027-01-01');
+            assertEqual(isoOf(addDays(D('2026-03-01'), -1)), '2026-02-28');
+        });
+    });
+
+/* ───── Escalation ───── */
+
+describe('Escalation (amountAtDate)',
+    'A yearly escalator must step on the calendar anniversary. Counting elapsed years as ' +
+    'milliseconds / 365.25 days is a day short of a non-leap year, so the step lands late.',
+    function () {
+        it('returns the flat amount when escalation is zero', function () {
+            const tx = mkTx({ amount: 1000, escalation: 0, startDate: '2026-01-01' });
+            assertClose(amountAtDate(tx, D('2030-06-01')), 1000, 1e-9);
+        });
+
+        it('steps exactly on each calendar anniversary', function () {
+            const tx = mkTx({ amount: 1000, escalation: 5, startDate: '2026-01-01', frequency: 'annual' });
+            assertClose(amountAtDate(tx, D('2026-01-01')), 1000.00, 0.005, 'year 0');
+            assertClose(amountAtDate(tx, D('2027-01-01')), 1050.00, 0.005, 'year 1 — must not still read 1000');
+            assertClose(amountAtDate(tx, D('2028-01-01')), 1102.50, 0.005, 'year 2 — must not still read 1050');
+            assertClose(amountAtDate(tx, D('2029-01-01')), 1157.625, 0.005, 'year 3');
+        });
+
+        it('holds the previous step until the day before the anniversary', function () {
+            const tx = mkTx({ amount: 1000, escalation: 5, startDate: '2026-01-01' });
+            assertClose(amountAtDate(tx, D('2026-12-31')), 1000.00, 0.005);
+            assertClose(amountAtDate(tx, D('2027-12-31')), 1050.00, 0.005);
+        });
+
+        it('counts one year across a span containing a leap day', function () {
+            const tx = mkTx({ amount: 1000, escalation: 10, startDate: '2024-03-01' });
+            assertClose(amountAtDate(tx, D('2025-02-28')), 1000, 0.005, '364 days is not a year');
+            assertClose(amountAtDate(tx, D('2025-03-01')), 1100, 0.005, '2024 was a leap year — this is still exactly one year');
+        });
+
+        it('compounds over a long horizon', function () {
+            const tx = mkTx({ amount: 1000, escalation: 5, startDate: '2026-01-01' });
+            assertClose(amountAtDate(tx, D('2036-01-01')), 1000 * Math.pow(1.05, 10), 0.005);
+        });
+
+        it('never escalates before the start date', function () {
+            const tx = mkTx({ amount: 1000, escalation: 5, startDate: '2026-01-01' });
+            assertClose(amountAtDate(tx, D('2025-01-01')), 1000, 0.005);
+        });
+    });
+
+/* ───── Frequency engine ───── */
+
+describe('Frequency engine — every frequency',
+    'occurrences(tx, from, to) is inclusive on both ends and never emits a date before startDate.',
+    function () {
+        it('one-time fires once, inside the window only', function () {
+            const tx = mkTx({ frequency: 'one-time', startDate: '2026-03-15' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-12-31'), ['2026-03-15']);
+            assertArrayEqual(occIso(tx, '2026-04-01', '2026-12-31'), [], 'window starts after the date');
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-03-14'), [], 'window ends before the date');
+            assertArrayEqual(occIso(tx, '2026-03-15', '2026-03-15'), ['2026-03-15'], 'both ends inclusive');
+        });
+
+        it('weekly steps every 7 days', function () {
+            const tx = mkTx({ frequency: 'weekly', startDate: '2026-01-01' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-01-31'),
+                ['2026-01-01', '2026-01-08', '2026-01-15', '2026-01-22', '2026-01-29']);
+            assertEqual(occIso(tx, '2026-01-01', '2026-12-31').length, 53, 'weekly occurrences in 2026');
+        });
+
+        it('bi-weekly yields 26 payments in a year', function () {
+            const tx = mkTx({ frequency: 'bi-weekly', startDate: '2026-01-02' });
+            assertEqual(occIso(tx, '2026-01-01', '2026-12-31').length, 26);
+        });
+
+        it('bi-weekly produces the 3-paycheck months', function () {
+            const tx = mkTx({ frequency: 'bi-weekly', startDate: '2026-01-02', kind: 'income' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-01-31'),
+                ['2026-01-02', '2026-01-16', '2026-01-30'], 'January 2026 is a 3-paycheck month');
+            assertArrayEqual(occIso(tx, '2026-07-01', '2026-07-31'),
+                ['2026-07-03', '2026-07-17', '2026-07-31'], 'July 2026 is a 3-paycheck month');
+            assertEqual(occIso(tx, '2026-02-01', '2026-02-28').length, 2, 'February 2026 is an ordinary 2-paycheck month');
+        });
+
+        it('semi-monthly from the 1st pays on the 1st and the 15th', function () {
+            const tx = mkTx({ frequency: 'semi-monthly', startDate: '2026-01-01' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-02-28'),
+                ['2026-01-01', '2026-01-15', '2026-02-01', '2026-02-15']);
+            assertEqual(occIso(tx, '2026-01-01', '2026-12-31').length, 24, '24 pay dates a year');
+        });
+
+        it('semi-monthly from the 15th pays on the 15th and the last day', function () {
+            const tx = mkTx({ frequency: 'semi-monthly', startDate: '2026-01-15' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-02-28'),
+                ['2026-01-15', '2026-01-31', '2026-02-15', '2026-02-28'],
+                'a 15th start is the other common semi-monthly schedule; the second date is end of month, not the 1st');
+            assertEqual(occIso(tx, '2026-01-01', '2026-12-31').length, 24, 'still 24 pay dates a year');
+        });
+
+        it('semi-monthly emits nothing before the start date', function () {
+            const tx = mkTx({ frequency: 'semi-monthly', startDate: '2026-01-15' });
+            const first = occIso(tx, '2026-01-01', '2026-12-31')[0];
+            assertEqual(first, '2026-01-15', 'the 1st of the starting month precedes startDate');
+        });
+
+        it('monthly from the 31st walks the 31st-to-February boundary', function () {
+            const tx = mkTx({ frequency: 'monthly', startDate: '2026-01-31' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-06-30'),
+                ['2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30', '2026-05-31', '2026-06-30'],
+                'February must clamp without permanently dragging later months back to the 28th');
+        });
+
+        it('monthly from the 29th survives a non-leap February', function () {
+            const tx = mkTx({ frequency: 'monthly', startDate: '2026-01-29' });
+            assertArrayEqual(occIso(tx, '2026-02-01', '2026-03-31'), ['2026-02-28', '2026-03-29']);
+        });
+
+        it('quarterly steps 3 months', function () {
+            const tx = mkTx({ frequency: 'quarterly', startDate: '2026-01-15' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-12-31'),
+                ['2026-01-15', '2026-04-15', '2026-07-15', '2026-10-15']);
+        });
+
+        it('semi-annual steps 6 months', function () {
+            const tx = mkTx({ frequency: 'semi-annual', startDate: '2026-02-10' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-12-31'), ['2026-02-10', '2026-08-10']);
+        });
+
+        it('annual steps 12 months', function () {
+            const tx = mkTx({ frequency: 'annual', startDate: '2026-02-10' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2028-12-31'),
+                ['2026-02-10', '2027-02-10', '2028-02-10']);
+        });
+
+        it('custom N days', function () {
+            const tx = mkTx({ frequency: 'custom', customN: 10, customUnit: 'days', startDate: '2026-01-01' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-01-31'),
+                ['2026-01-01', '2026-01-11', '2026-01-21', '2026-01-31']);
+        });
+
+        it('custom N weeks', function () {
+            const tx = mkTx({ frequency: 'custom', customN: 3, customUnit: 'weeks', startDate: '2026-01-01' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-03-31'),
+                ['2026-01-01', '2026-01-22', '2026-02-12', '2026-03-05', '2026-03-26']);
+        });
+
+        it('custom N months clamps like monthly', function () {
+            const tx = mkTx({ frequency: 'custom', customN: 2, customUnit: 'months', startDate: '2026-01-31' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-12-31'),
+                ['2026-01-31', '2026-03-31', '2026-05-31', '2026-07-31', '2026-09-30', '2026-11-30']);
+        });
+
+        it('custom treats a missing or zero N as 1', function () {
+            const tx = mkTx({ frequency: 'custom', customN: 0, customUnit: 'days', startDate: '2026-01-01' });
+            assertEqual(occIso(tx, '2026-01-01', '2026-01-05').length, 5, 'must not loop forever on a zero step');
+        });
+    });
+
+describe('Frequency engine — bounds and lifetimes',
+    'End dates, pausing, and windows that open long after the transaction started.',
+    function () {
+        it('an end date stops the series', function () {
+            const tx = mkTx({ frequency: 'monthly', startDate: '2026-01-01', endDate: '2026-03-15' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-12-31'),
+                ['2026-01-01', '2026-02-01', '2026-03-01']);
+        });
+
+        it('an end date on an occurrence keeps that occurrence', function () {
+            const tx = mkTx({ frequency: 'monthly', startDate: '2026-01-01', endDate: '2026-03-01' });
+            assertEqual(occIso(tx, '2026-01-01', '2026-12-31').length, 3, 'the end date is inclusive');
+        });
+
+        it('an end date before the window produces nothing', function () {
+            const tx = mkTx({ frequency: 'monthly', startDate: '2020-01-01', endDate: '2021-01-01' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-12-31'), []);
+        });
+
+        it('a paused transaction produces nothing', function () {
+            const tx = mkTx({ frequency: 'monthly', startDate: '2026-01-01', paused: true });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-12-31'), []);
+        });
+
+        it('a paused one-time transaction produces nothing', function () {
+            const tx = mkTx({ frequency: 'one-time', startDate: '2026-03-15', paused: true });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-12-31'), []);
+        });
+
+        it('a transaction with no start date produces nothing', function () {
+            const tx = mkTx({ frequency: 'monthly', startDate: '' });
+            assertArrayEqual(occIso(tx, '2026-01-01', '2026-12-31'), []);
+        });
+
+        it('a monthly bill started decades ago still fires in the window', function () {
+            const tx = mkTx({ frequency: 'monthly', startDate: '1990-01-01' });
+            assertEqual(occIso(tx, '2026-01-01', '2026-12-31').length, 12);
+        });
+
+        it('a monthly bill started over a century ago still fires in the window', function () {
+            // 1900 → 2026 is more than 1000 monthly steps. An iteration cap on the
+            // stepper silently returns an empty list here instead of 12 dates.
+            const tx = mkTx({ frequency: 'monthly', startDate: '1900-01-01' });
+            const occs = occIso(tx, '2026-01-01', '2026-12-31');
+            assertEqual(occs.length, 12, 'a step cap must not silently swallow the whole series');
+            assertEqual(occs[0], '2026-01-01');
+        });
+
+        it('a weekly item started decades ago still fires in the window', function () {
+            const tx = mkTx({ frequency: 'weekly', startDate: '1970-01-01' });
+            assertEqual(occIso(tx, '2026-06-01', '2026-06-30').length, 4);
+        });
+
+        it('a quarterly item started decades ago still fires in the window', function () {
+            const tx = mkTx({ frequency: 'quarterly', startDate: '1900-01-01' });
+            assertEqual(occIso(tx, '2026-01-01', '2026-12-31').length, 4);
+        });
+    });
+
+/* ───── Day counting across DST ───── */
+
+// Consecutive local midnights either side of the first UTC-offset change of the
+// year. Returns null in a timezone that has no transition.
+function findDstTransition() {
+    const year = new Date().getFullYear();
+    let prev = new Date(year, 0, 1);
+    for (let i = 1; i <= 730; i++) {
+        const d = new Date(year, 0, 1 + i);
+        if (d.getTimezoneOffset() !== prev.getTimezoneOffset()) return { before: prev, after: d };
+        prev = d;
+    }
+    return null;
+}
+function tzName() {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'; }
+    catch (e) { return 'unknown'; }
+}
+
+describe('Day counting across a DST boundary',
+    'Local midnights are 23 or 25 hours apart at a clock change, so (b - a) / 86400000 loses ' +
+    'or gains a day. Days-in-red and the tightest-week window both depend on getting this right.',
+    function () {
+        it('daysBetween counts plain calendar days', function () {
+            if (typeof daysBetween !== 'function') {
+                failWith('engine.js does not export daysBetween(a, b) — a calendar-day helper is required so day counting does not use (b - a) / 86400000');
+            }
+            assertEqual(daysBetween(D('2026-06-01'), D('2026-06-01')), 0);
+            assertEqual(daysBetween(D('2026-06-01'), D('2026-06-02')), 1);
+            assertEqual(daysBetween(D('2026-06-01'), D('2026-07-01')), 30);
+            assertEqual(daysBetween(D('2026-01-01'), D('2027-01-01')), 365);
+            assertEqual(daysBetween(D('2024-01-01'), D('2025-01-01')), 366, 'leap year');
+        });
+
+        it('daysBetween counts one day across the local clock change', function () {
+            if (typeof daysBetween !== 'function') failWith('engine.js does not export daysBetween(a, b)');
+            const t = findDstTransition();
+            if (!t) skip('timezone ' + tzName() + ' has no UTC-offset change this year, so there is nothing to cross');
+            assertEqual(daysBetween(t.before, t.after), 1,
+                'crossing ' + isoOf(t.before) + ' → ' + isoOf(t.after) + ' in ' + tzName());
+            assertEqual(daysBetween(addDaysLocal(t.before, -1), addDaysLocal(t.after, 1)), 3,
+                'a three-day span containing the clock change');
+        });
+
+        it('the naive millisecond division is genuinely wrong at that boundary', function () {
+            const t = findDstTransition();
+            if (!t) skip('timezone ' + tzName() + ' has no UTC-offset change this year');
+            const naive = (t.after - t.before) / 86400000;
+            assert(naive !== 1,
+                'this timezone changes offset on ' + isoOf(t.after) + ' yet the raw division still reads exactly 1 day — the test below proves nothing here');
+        });
+    });
+
+/* ───── Forecast: liquidity and per-account rollups ───── */
+
+describe('Forecast — liquid cash vs net worth',
+    'runningBalance and startingBalance mean LIQUID CASH (checking, savings, cash). ' +
+    'Investments sit in net worth only; credit is debt and is never cash.',
+    function () {
+        function liquidityState() {
+            const checking  = mkAccount({ name: 'Checking',  type: 'checking',   startingBalance: 3000 });
+            const savings   = mkAccount({ name: 'Savings',   type: 'savings',    startingBalance: 2000 });
+            const wallet    = mkAccount({ name: 'Wallet',    type: 'cash',       startingBalance: 200 });
+            const brokerage = mkAccount({ name: 'Brokerage', type: 'investment', startingBalance: 100000 });
+            const card      = mkAccount({ name: 'Card',      type: 'credit',     startingBalance: 1200, apr: 0 });
+            return { s: mkState({ accounts: [checking, savings, wallet, brokerage, card] }),
+                     checking: checking, savings: savings, wallet: wallet, brokerage: brokerage, card: card };
+        }
+
+        it('startingBalance counts only liquid accounts', function () {
+            const f = liquidityState();
+            withState(f.s, function () {
+                const fc = buildForecast(12);
+                assertClose(fc.startingBalance, 5200, 0.005, 'checking + savings + cash, with no investment and no credit');
+            });
+        });
+
+        it('startingNetWorth counts every account and subtracts debt', function () {
+            const f = liquidityState();
+            withState(f.s, function () {
+                const fc = buildForecast(12);
+                assertClose(fc.startingNetWorth, 3000 + 2000 + 200 + 100000 - 1200, 0.005);
+            });
+        });
+
+        it('netWorthRunning is a full-length series', function () {
+            const f = liquidityState();
+            withState(f.s, function () {
+                const fc = buildForecast(12);
+                assert(Array.isArray(fc.netWorthRunning), 'netWorthRunning must be an array');
+                assertEqual(fc.netWorthRunning.length, 12);
+                fc.netWorthRunning.forEach(function (v, i) {
+                    assert(typeof v === 'number' && isFinite(v), 'netWorthRunning[' + i + '] is ' + show(v));
+                });
+            });
+        });
+
+        it('byAccount covers every account and marks liquidity', function () {
+            const f = liquidityState();
+            withState(f.s, function () {
+                const fc = buildForecast(12);
+                assertEqual(Object.keys(fc.byAccount).length, 5);
+                assertEqual(acctOf(fc, f.checking.id).liquid,  true);
+                assertEqual(acctOf(fc, f.savings.id).liquid,   true);
+                assertEqual(acctOf(fc, f.wallet.id).liquid,    true);
+                assertEqual(acctOf(fc, f.brokerage.id).liquid, false, 'an investment account is not spendable cash');
+                assertEqual(acctOf(fc, f.card.id).liquid,      false, 'a credit account is debt, never cash');
+            });
+        });
+
+        it('each byAccount entry carries a full monthly and running series', function () {
+            const f = liquidityState();
+            withState(f.s, function () {
+                const fc = buildForecast(12);
+                Object.keys(fc.byAccount).forEach(function (id) {
+                    const a = fc.byAccount[id];
+                    assertEqual(a.monthly.length, 12, 'monthly series for ' + a.name);
+                    assertEqual(a.running.length, 12, 'running series for ' + a.name);
+                    assert(typeof a.start === 'number' && isFinite(a.start), 'start for ' + a.name + ' is ' + show(a.start));
+                });
+            });
+        });
+
+        it('accountsList mirrors byAccount in state.accounts order', function () {
+            const f = liquidityState();
+            withState(f.s, function () {
+                const fc = buildForecast(12);
+                assert(Array.isArray(fc.accountsList), 'accountsList must be an array');
+                assertArrayEqual(fc.accountsList.map(function (a) { return a.id; }),
+                    f.s.accounts.map(function (a) { return a.id; }));
+            });
+        });
+
+        it('the legacy keys the app still reads are all present', function () {
+            const f = liquidityState();
+            withState(f.s, function () {
+                const fc = buildForecast(12);
+                ['monthList', 'txData', 'startingBalance', 'monthlyIncome', 'monthlyExpense',
+                 'monthlyNet', 'monthlyByCategory', 'runningBalance', 'daysInRed', 'lowest'
+                ].forEach(function (k) {
+                    assert(fc[k] !== undefined, 'buildForecast() dropped the existing key "' + k + '"');
+                });
+            });
+        });
+    });
+
+describe('Forecast — the balance cutoff',
+    'An account balance is stated as of a snapshot — its asOfDate, or today when none is set. ' +
+    'Anything that fell due before the snapshot is already inside that balance, so replaying it ' +
+    'would charge the same bill twice. Only the scan moves; the month grid still starts at the 1st.',
+    function () {
+        it('a charge dated yesterday is not replayed onto the balance', function () {
+            const cash = mkAccount({ type: 'checking', startingBalance: 1000 });
+            const past = mkTx({ kind: 'expense', amount: 400, frequency: 'one-time',
+                                startDate: daysFromNowIso(-1), categoryId: 'cat_housing', accountId: cash.id });
+            withState(mkState({ accounts: [cash], transactions: [past] }), function () {
+                const fc = buildForecast(12);
+                assertClose(fc.startingBalance, 1000, 0.005, 'the stated balance already reflects it');
+                assertClose(acctOf(fc, cash.id).running[0], 1000, 0.005);
+                assertClose(sum(fc.monthlyExpense), 0, 0.005);
+            });
+        });
+
+        it('a charge dated today is counted', function () {
+            const cash = mkAccount({ type: 'checking', startingBalance: 1000 });
+            const now = mkTx({ kind: 'expense', amount: 400, frequency: 'one-time',
+                               startDate: todayIso(), categoryId: 'cat_housing', accountId: cash.id });
+            withState(mkState({ accounts: [cash], transactions: [now] }), function () {
+                const fc = buildForecast(12);
+                assertClose(sum(fc.monthlyExpense), 400, 0.005, 'the cutoff includes today itself');
+                assertClose(acctOf(fc, cash.id).running[0], 600, 0.005);
+            });
+        });
+
+        it('an account asOfDate moves the cutoff forward', function () {
+            const cash = mkAccount({ type: 'checking', startingBalance: 1000, asOfDate: daysFromNowIso(10) });
+            const before = mkTx({ kind: 'expense', amount: 100, frequency: 'one-time',
+                                  startDate: daysFromNowIso(5), categoryId: 'cat_housing', accountId: cash.id });
+            const after = mkTx({ kind: 'expense', amount: 200, frequency: 'one-time',
+                                 startDate: daysFromNowIso(15), categoryId: 'cat_housing', accountId: cash.id });
+            withState(mkState({ accounts: [cash], transactions: [before, after] }), function () {
+                const fc = buildForecast(12);
+                assertClose(sum(fc.monthlyExpense), 200, 0.005,
+                    'a balance stated for ten days from now already contains the charge five days from now');
+            });
+        });
+
+        it('the month grid still starts at the 1st of the current month', function () {
+            withState(mkState(), function () {
+                const fc = buildForecast(12);
+                const t = new Date();
+                assertEqual(isoOf(fc.monthList[0].date), isoOf(new Date(t.getFullYear(), t.getMonth(), 1)),
+                    'the cutoff moves the scan, not the columns');
+            });
+        });
+    });
+
+describe('Forecast — transfers',
+    'A transfer moves money. It is neither income nor expense, and it cannot change the total.',
+    function () {
+        it('a cash-to-cash transfer leaves the aggregate untouched', function () {
+            const from = mkAccount({ name: 'Checking', type: 'checking', startingBalance: 1000 });
+            const to   = mkAccount({ name: 'Savings',  type: 'savings',  startingBalance: 0 });
+            const tx   = mkTx({
+                kind: 'transfer', amount: 250, frequency: 'monthly',
+                startDate: todayIso(), categoryId: 'cat_savings',
+                accountId: to.id, fromAccountId: from.id
+            });
+            withState(mkState({ accounts: [from, to], transactions: [tx] }), function () {
+                const fc = buildForecast(12);
+                assertClose(fc.startingBalance, 1000, 0.005);
+                fc.runningBalance.forEach(function (v, i) {
+                    assertClose(v, 1000, 0.005, 'liquid total in month ' + i + ' must not move');
+                });
+                fc.netWorthRunning.forEach(function (v, i) {
+                    assertClose(v, 1000, 0.005, 'net worth in month ' + i + ' must not move');
+                });
+            });
+        });
+
+        it('a transfer debits one account and credits the other', function () {
+            const from = mkAccount({ name: 'Checking', type: 'checking', startingBalance: 1000 });
+            const to   = mkAccount({ name: 'Savings',  type: 'savings',  startingBalance: 0 });
+            const tx   = mkTx({
+                kind: 'transfer', amount: 250, frequency: 'monthly',
+                startDate: todayIso(), categoryId: 'cat_savings',
+                accountId: to.id, fromAccountId: from.id
+            });
+            withState(mkState({ accounts: [from, to], transactions: [tx] }), function () {
+                const fc = buildForecast(3);
+                assertClose(acctOf(fc, from.id).running[0], 750, 0.005);
+                assertClose(acctOf(fc, to.id).running[0],   250, 0.005);
+                assertClose(acctOf(fc, from.id).running[2], 250, 0.005);
+                assertClose(acctOf(fc, to.id).running[2],   750, 0.005);
+            });
+        });
+
+        it('a transfer is not counted as income or expense', function () {
+            const from = mkAccount({ type: 'checking', startingBalance: 1000 });
+            const to   = mkAccount({ type: 'savings',  startingBalance: 0 });
+            const tx   = mkTx({
+                kind: 'transfer', amount: 250, frequency: 'monthly',
+                startDate: todayIso(), categoryId: 'cat_savings',
+                accountId: to.id, fromAccountId: from.id
+            });
+            withState(mkState({ accounts: [from, to], transactions: [tx] }), function () {
+                const fc = buildForecast(12);
+                assertClose(sum(fc.monthlyIncome), 0, 0.005, 'a transfer is not income');
+                assertClose(sum(fc.monthlyExpense), 0, 0.005, 'a transfer is not spending');
+            });
+        });
+    });
+
+describe('Forecast — credit cards',
+    'A card charge grows debt without touching cash; a card payment shrinks both the debt and ' +
+    'the paying account. The sign convention for a credit balance is the engine\'s business, so ' +
+    'these tests assert magnitudes and directions.',
+    function () {
+        function cardState(txs, apr) {
+            const cash = mkAccount({ name: 'Checking', type: 'checking', startingBalance: 1000 });
+            const card = mkAccount({ name: 'Card', type: 'credit', startingBalance: 500, apr: apr || 0, minPayment: 0 });
+            return { cash: cash, card: card,
+                     s: mkState({ accounts: [cash, card], transactions: txs(cash, card) }) };
+        }
+
+        it('an expense charged to a card raises the debt and leaves cash alone', function () {
+            const f = cardState(function (cash, card) {
+                return [mkTx({ kind: 'expense', amount: 200, frequency: 'one-time',
+                               startDate: todayIso(), categoryId: 'cat_dining', accountId: card.id })];
+            });
+            withState(f.s, function () {
+                const fc = buildForecast(12);
+                const c = acctOf(fc, f.card.id);
+                assertClose(Math.abs(c.running[0]) - Math.abs(c.start), 200, 0.005, 'the debt grew by the charge');
+                assertClose(acctOf(fc, f.cash.id).running[0], 1000, 0.005, 'the cash account was not touched');
+                assertClose(fc.runningBalance[0], 1000, 0.005, 'liquid cash was not touched');
+            });
+        });
+
+        it('a card charge is still counted as spending', function () {
+            const f = cardState(function (cash, card) {
+                return [mkTx({ kind: 'expense', amount: 200, frequency: 'one-time',
+                               startDate: todayIso(), categoryId: 'cat_dining', accountId: card.id })];
+            });
+            withState(f.s, function () {
+                const fc = buildForecast(12);
+                assertClose(sum(fc.monthlyExpense), 200, 0.005, 'the charge is real spending even though no cash moved');
+            });
+        });
+
+        it('a card charge lowers net worth by the amount charged', function () {
+            const f = cardState(function (cash, card) {
+                return [mkTx({ kind: 'expense', amount: 200, frequency: 'one-time',
+                               startDate: todayIso(), categoryId: 'cat_dining', accountId: card.id })];
+            });
+            withState(f.s, function () {
+                const fc = buildForecast(12);
+                assertClose(fc.startingNetWorth, 500, 0.005, '1000 cash minus 500 owed');
+                assertClose(fc.netWorthRunning[0], 300, 0.005, 'and the charge is not double-counted against cash as well');
+            });
+        });
+
+        it('a payment to the card lowers the debt and the paying account together', function () {
+            const f = cardState(function (cash, card) {
+                return [mkTx({ kind: 'transfer', amount: 300, frequency: 'one-time',
+                               startDate: todayIso(), categoryId: 'cat_debt',
+                               accountId: card.id, fromAccountId: cash.id })];
+            });
+            withState(f.s, function () {
+                const fc = buildForecast(12);
+                const c = acctOf(fc, f.card.id);
+                assertClose(acctOf(fc, f.cash.id).running[0], 700, 0.005, 'the cash account paid');
+                assertClose(Math.abs(c.running[0]), 200, 0.005, 'the debt fell from 500 to 200');
+                assertClose(fc.runningBalance[0], 700, 0.005, 'liquid cash fell by the payment');
+            });
+        });
+
+        it('a card payment is net-worth neutral', function () {
+            const f = cardState(function (cash, card) {
+                return [mkTx({ kind: 'transfer', amount: 300, frequency: 'one-time',
+                               startDate: todayIso(), categoryId: 'cat_debt',
+                               accountId: card.id, fromAccountId: cash.id })];
+            });
+            withState(f.s, function () {
+                const fc = buildForecast(12);
+                assertClose(fc.netWorthRunning[0], fc.startingNetWorth, 0.005,
+                    'moving cash into a debt is a wash — this is the double-count the old model produced');
+            });
+        });
+
+        it('a zero-APR debt with no payments stays exactly where it is', function () {
+            const f = cardState(function () { return []; }, 0);
+            withState(f.s, function () {
+                const fc = buildForecast(12);
+                const c = acctOf(fc, f.card.id);
+                c.running.forEach(function (v, i) {
+                    assertClose(Math.abs(v), 500, 0.005, 'month ' + i + ' of a 0% balance');
+                });
+            });
+        });
+
+        it('APR accrues monthly on the outstanding debt', function () {
+            const f = cardState(function () { return []; }, 12);
+            withState(f.s, function () {
+                const fc = buildForecast(12);
+                const r = acctOf(fc, f.card.id).running.map(Math.abs);
+                for (let i = 1; i < r.length; i++) {
+                    assert(r[i] > r[i - 1], 'an unpaid 12% balance must grow every month (month ' + i + ')');
+                }
+                // 11 or 12 compounding periods depending on whether the horizon's
+                // first month accrues; both are defensible, a flat balance is not.
+                assertBetween(r[11], 500 * Math.pow(1.01, 11) - 0.01, 500 * Math.pow(1.01, 12) + 0.01,
+                    'roughly one year of 1%/month compounding on 500');
+            });
+        });
+
+        it('a credit account never counts as spendable cash', function () {
+            const cash = mkAccount({ type: 'checking', startingBalance: 100 });
+            const card = mkAccount({ type: 'credit', startingBalance: 5000, apr: 0 });
+            withState(mkState({ accounts: [cash, card] }), function () {
+                const fc = buildForecast(12);
+                assertClose(fc.startingBalance, 100, 0.005, 'a 5000 balance owed is not 5000 of cash');
+            });
+        });
+    });
+
+describe('Forecast — determinism and sign safety',
+    'The same data must forecast the same way regardless of the order it was typed in, and a ' +
+    'negative amount must never flip a transaction into its opposite.',
+    function () {
+        it('the lowest balance does not depend on transaction entry order', function () {
+            const cash = mkAccount({ type: 'checking', startingBalance: 0 });
+            const day  = todayIso();
+            function pay()  { return mkTx({ id: 'tx_pay',  kind: 'income',  amount: 5000, frequency: 'one-time', startDate: day, categoryId: 'cat_salary',  accountId: cash.id }); }
+            function rent() { return mkTx({ id: 'tx_rent', kind: 'expense', amount: 4900, frequency: 'one-time', startDate: day, categoryId: 'cat_housing', accountId: cash.id }); }
+
+            const a = withState(mkState({ accounts: [cash], transactions: [pay(), rent()] }), function () { return buildForecast(12); });
+            const b = withState(mkState({ accounts: [cash], transactions: [rent(), pay()] }), function () { return buildForecast(12); });
+
+            assertClose(b.lowest.balance, a.lowest.balance, 0.005,
+                'two same-day events must not report a different low just because one was entered first');
+            assertEqual(isoOf(asDate(b.lowest.date)), isoOf(asDate(a.lowest.date)), 'lowest date');
+            assertEqual(b.daysInRed, a.daysInRed, 'days in red');
+        });
+
+        it('the running balance series does not depend on entry order', function () {
+            const cash = mkAccount({ type: 'checking', startingBalance: 2500 });
+            const txs = [
+                mkTx({ id: 'tx_a', kind: 'income',  amount: 3200, frequency: 'monthly', startDate: todayIso(),  categoryId: 'cat_salary',    accountId: cash.id }),
+                mkTx({ id: 'tx_b', kind: 'expense', amount: 1450, frequency: 'monthly', startDate: todayIso(),  categoryId: 'cat_housing',   accountId: cash.id }),
+                mkTx({ id: 'tx_c', kind: 'expense', amount: 260,  frequency: 'weekly',  startDate: todayIso(),  categoryId: 'cat_groceries', accountId: cash.id }),
+                mkTx({ id: 'tx_d', kind: 'expense', amount: 900,  frequency: 'annual',  startDate: monthsFromNowIso(2, 1),  categoryId: 'cat_insurance', accountId: cash.id })
+            ];
+            const a = withState(mkState({ accounts: [cash], transactions: txs.slice() }), function () { return buildForecast(12); });
+            const b = withState(mkState({ accounts: [cash], transactions: txs.slice().reverse() }), function () { return buildForecast(12); });
+            b.runningBalance.forEach(function (v, i) {
+                assertClose(v, a.runningBalance[i], 0.005, 'month ' + i);
+            });
+        });
+
+        it('a negative expense amount cannot become income', function () {
+            const cash = mkAccount({ type: 'checking', startingBalance: 1000 });
+            const tx = mkTx({ kind: 'expense', amount: -500, frequency: 'monthly',
+                              startDate: todayIso(), categoryId: 'cat_housing', accountId: cash.id });
+            withState(mkState({ accounts: [cash], transactions: [tx] }), function () {
+                const fc = buildForecast(12);
+                assertClose(sum(fc.monthlyIncome), 0, 0.005, 'an expense must never add to income, whatever its sign');
+                fc.monthlyNet.forEach(function (n, i) {
+                    assert(n <= 0.005, 'month ' + i + ' net is ' + n + ' — a negative expense inflated the forecast');
+                });
+                assert(fc.runningBalance[11] <= fc.startingBalance + 0.005,
+                    'the balance grew from an expense');
+            });
+        });
+
+        it('a negative income amount cannot become an expense', function () {
+            const cash = mkAccount({ type: 'checking', startingBalance: 1000 });
+            const tx = mkTx({ kind: 'income', amount: -500, frequency: 'monthly',
+                              startDate: todayIso(), categoryId: 'cat_salary', accountId: cash.id });
+            withState(mkState({ accounts: [cash], transactions: [tx] }), function () {
+                const fc = buildForecast(12);
+                assertClose(sum(fc.monthlyExpense), 0, 0.005, 'income must never be booked as spending');
+            });
+        });
+
+        it('an empty state forecasts cleanly', function () {
+            withState(mkState(), function () {
+                const fc = buildForecast(12);
+                assertClose(fc.startingBalance, 0, 1e-9);
+                assertEqual(fc.daysInRed, 0);
+                assertEqual(fc.monthList.length, 12);
+                fc.runningBalance.forEach(function (v, i) {
+                    assert(isFinite(v), 'runningBalance[' + i + '] is ' + show(v));
+                });
+            });
+        });
+    });
+
+describe('Forecast — days in red, first negative day, tightest week',
+    'All three read liquid cash. A large investment balance must not paper over an overdrawn ' +
+    'current account.',
+    function () {
+        function redState(extraAccounts) {
+            const cash = mkAccount({ name: 'Checking', type: 'checking', startingBalance: 100 });
+            const rent = mkTx({ kind: 'expense', amount: 2000, frequency: 'monthly',
+                                startDate: todayIso(), categoryId: 'cat_housing', accountId: cash.id });
+            return { cash: cash, s: mkState({ accounts: [cash].concat(extraAccounts || []), transactions: [rent] }) };
+        }
+
+        it('an overdrawn account reports days in red', function () {
+            withState(redState().s, function () {
+                const fc = buildForecast(12);
+                assert(fc.daysInRed > 300, 'expected most of the year in the red, got ' + fc.daysInRed);
+            });
+        });
+
+        it('a large investment balance does not suppress days in red', function () {
+            const plain  = withState(redState().s, function () { return buildForecast(12); });
+            const withIra = withState(redState([mkAccount({ name: 'IRA', type: 'investment', startingBalance: 1000000 })]).s,
+                function () { return buildForecast(12); });
+            assertEqual(withIra.daysInRed, plain.daysInRed,
+                'a million in a brokerage does not pay the rent — days in red is a liquid-cash measure');
+            assertClose(withIra.startingBalance, 100, 0.005, 'and the investment is not liquid cash either');
+            assertClose(withIra.startingNetWorth, 1000100, 0.005, 'it does belong in net worth');
+        });
+
+        it('a healthy forecast reports zero days in red', function () {
+            const cash = mkAccount({ type: 'checking', startingBalance: 50000 });
+            const rent = mkTx({ kind: 'expense', amount: 500, frequency: 'monthly',
+                                startDate: todayIso(), categoryId: 'cat_housing', accountId: cash.id });
+            withState(mkState({ accounts: [cash], transactions: [rent] }), function () {
+                const fc = buildForecast(12);
+                assertEqual(fc.daysInRed, 0);
+                assertEqual(fc.firstNegativeDate, null, 'nothing ever goes negative here');
+            });
+        });
+
+        it('firstNegativeDate is the first day liquid cash goes below zero', function () {
+            withState(redState().s, function () {
+                const fc = buildForecast(12);
+                const d = asDate(fc.firstNegativeDate);
+                assert(d instanceof Date && !isNaN(d), 'firstNegativeDate is ' + show(fc.firstNegativeDate));
+                assertEqual(isoOf(d), todayIso(), 'the rent lands on the first scanned day and takes 100 to -1900');
+            });
+        });
+
+        it('days in red and firstNegativeDate agree with each other', function () {
+            [redState().s, mkState()].forEach(function (s, i) {
+                withState(s, function () {
+                    const fc = buildForecast(12);
+                    assertEqual(fc.daysInRed > 0, fc.firstNegativeDate != null,
+                        'state ' + i + ': daysInRed=' + fc.daysInRed + ' but firstNegativeDate=' + show(fc.firstNegativeDate));
+                });
+            });
+        });
+
+        it('tightestWeek finds the 7-day window with the worst net flow', function () {
+            const cash = mkAccount({ type: 'checking', startingBalance: 20000 });
+            const hitIso = monthsFromNowIso(2, 10);
+            const hit = mkTx({ kind: 'expense', amount: 4000, frequency: 'one-time',
+                               startDate: hitIso, categoryId: 'cat_housing', accountId: cash.id });
+            const small = mkTx({ kind: 'expense', amount: 50, frequency: 'monthly',
+                                 startDate: todayIso(), categoryId: 'cat_subs', accountId: cash.id });
+            withState(mkState({ accounts: [cash], transactions: [hit, small] }), function () {
+                const fc = buildForecast(12);
+                assert(fc.tightestWeek, 'tightestWeek is ' + show(fc.tightestWeek));
+                assert(fc.tightestWeek.net < 0, 'the tightest week should be a net outflow, got ' + fc.tightestWeek.net);
+                const start = asDate(fc.tightestWeek.start);
+                const end = asDate(fc.tightestWeek.end);
+                const hitDay = D(hitIso);
+                assert(start <= hitDay && hitDay <= end,
+                    'the 4000 hit on ' + hitIso + ' should fall inside ' + isoOf(start) + '..' + isoOf(end));
+            });
+        });
+
+        it('tightestWeek is null or finite on an empty state, never NaN', function () {
+            withState(mkState(), function () {
+                const fc = buildForecast(12);
+                if (fc.tightestWeek !== null) {
+                    assert(isFinite(fc.tightestWeek.net), 'tightestWeek.net is ' + show(fc.tightestWeek.net));
+                }
+            });
+        });
+    });
+
+/* ───── Debt payoff ───── */
+
+describe('Forecast — debtSchedule',
+    'Debt projection must terminate. A minimum payment that cannot cover the monthly interest ' +
+    'is a real situation, and the answer is "never", not an infinite loop.',
+    function () {
+        it('is null when there are no credit accounts', function () {
+            const cash = mkAccount({ type: 'checking', startingBalance: 1000 });
+            withState(mkState({ accounts: [cash] }), function () {
+                assertEqual(buildForecast(12).debtSchedule, null);
+            });
+        });
+
+        it('lists one entry per credit account', function () {
+            const cash = mkAccount({ type: 'checking', startingBalance: 5000 });
+            const a = mkAccount({ name: 'Visa',  type: 'credit', startingBalance: 1000, apr: 0,  minPayment: 100 });
+            const b = mkAccount({ name: 'Store', type: 'credit', startingBalance: 400,  apr: 24, minPayment: 50 });
+            withState(mkState({ accounts: [cash, a, b] }), function () {
+                const ds = buildForecast(24).debtSchedule;
+                assert(ds && Array.isArray(ds.accounts), 'debtSchedule is ' + show(ds));
+                assertEqual(ds.accounts.length, 2);
+                assert(isFinite(ds.totalInterest), 'totalInterest is ' + show(ds.totalInterest));
+                assert(ds.totalInterest >= 0, 'totalInterest must not be negative');
+            });
+        });
+
+        it('a 0% debt with a real minimum payment pays off, with no interest', function () {
+            const cash = mkAccount({ type: 'checking', startingBalance: 5000 });
+            const card = mkAccount({ name: 'Visa', type: 'credit', startingBalance: 1000, apr: 0, minPayment: 100 });
+            withState(mkState({ accounts: [cash, card] }), function () {
+                const ds = buildForecast(24).debtSchedule;
+                const row = ds.accounts.find(function (r) { return r.id === card.id; });
+                assert(row, 'no debtSchedule row for the card');
+                assert(asDate(row.payoffDate) instanceof Date, 'payoffDate is ' + show(row.payoffDate));
+                assertClose(row.totalInterest, 0, 0.005, 'a 0% card accrues nothing');
+            });
+        });
+
+        it('a minimum payment below the monthly interest returns unresolved, not a hang', function () {
+            // 36% APR on 5000 is 150/month of interest; a 100 minimum never touches
+            // the principal. This must come back with payoffDate null.
+            const cash = mkAccount({ type: 'checking', startingBalance: 5000 });
+            const card = mkAccount({ name: 'Trap', type: 'credit', startingBalance: 5000, apr: 36, minPayment: 100 });
+            withState(mkState({ accounts: [cash, card] }), function () {
+                const t0 = performance.now();
+                const ds = buildForecast(24).debtSchedule;
+                const elapsed = performance.now() - t0;
+                assert(elapsed < 2000, 'buildForecast took ' + Math.round(elapsed) + 'ms — the payoff loop is not bounded');
+                const row = ds.accounts.find(function (r) { return r.id === card.id; });
+                assert(row, 'no debtSchedule row for the card');
+                assertEqual(row.payoffDate, null, 'this debt is never repaid at this payment');
+                assert(isFinite(row.totalInterest), 'totalInterest is ' + show(row.totalInterest) + ' — an unbounded loop leaks Infinity here');
+            });
+        });
+    });
+
+// payoffSchedule(accounts, extraPerMonth, method) returns its rows in the order
+// the accounts were handed to it, so the strategy shows up in *when* each debt
+// clears rather than in the array order. monthsToPayoff is the observable.
+function payoffOrder(result) {
+    assert(result && Array.isArray(result.accounts), 'payoffSchedule() returned ' + show(result));
+    const rows = result.accounts.slice().sort(function (a, b) {
+        const am = a.monthsToPayoff == null ? Infinity : a.monthsToPayoff;
+        const bm = b.monthsToPayoff == null ? Infinity : b.monthsToPayoff;
+        return am - bm;
+    });
+    for (let i = 1; i < rows.length; i++) {
+        assert(rows[i].monthsToPayoff !== rows[i - 1].monthsToPayoff,
+            'two debts cleared in the same month (' + rows[i].monthsToPayoff + '), so this data cannot tell the strategies apart');
+    }
+    return rows.map(function (r) { return r.id; });
+}
+
+describe('payoffSchedule — strategy ordering',
+    'payoffSchedule(accounts, extraPerMonth, method). Avalanche clears the highest rate first ' +
+    'and so pays the least interest; snowball clears the smallest balance first for the earlier win.',
+    function () {
+        // Chosen so the two strategies clear the debts in a different order and in
+        // different months: the store card is small but barely serviced by its own
+        // minimum, the Visa is larger and far more expensive to carry.
+        function debts() {
+            return [
+                mkAccount({ id: 'acct_small', name: 'Store card', type: 'credit', startingBalance: 900,  apr: 5,  minPayment: 10 }),
+                mkAccount({ id: 'acct_big',   name: 'Visa',       type: 'credit', startingBalance: 2000, apr: 25, minPayment: 50 })
+            ];
+        }
+        function needFn() {
+            if (typeof payoffSchedule !== 'function') failWith('engine.js does not export payoffSchedule()');
+        }
+
+        it('returns null when no account is a credit account', function () {
+            needFn();
+            assertEqual(payoffSchedule([mkAccount({ type: 'checking', startingBalance: 500 })], 100, 'avalanche'), null);
+        });
+
+        it('avalanche clears the highest APR first', function () {
+            needFn();
+            assertArrayEqual(payoffOrder(payoffSchedule(debts(), 500, 'avalanche')),
+                ['acct_big', 'acct_small'], '25% before 5%');
+        });
+
+        it('snowball clears the smallest balance first', function () {
+            needFn();
+            assertArrayEqual(payoffOrder(payoffSchedule(debts(), 500, 'snowball')),
+                ['acct_small', 'acct_big'], '900 before 2000');
+        });
+
+        it('avalanche pays less total interest than snowball', function () {
+            needFn();
+            const av = payoffSchedule(debts(), 500, 'avalanche');
+            const sn = payoffSchedule(debts(), 500, 'snowball');
+            assert(av.totalInterest < sn.totalInterest,
+                'paying less is what makes it avalanche: avalanche ' + av.totalInterest.toFixed(2) +
+                ' vs snowball ' + sn.totalInterest.toFixed(2));
+        });
+
+        it('an unrecognised method falls back rather than throwing', function () {
+            needFn();
+            assertEqual(payoffSchedule(debts(), 500, 'nonsense').method, 'avalanche');
+        });
+
+        it('terminates on a debt whose minimum cannot cover the interest', function () {
+            needFn();
+            // 36% APR on 5000 is 150/month of interest, so a 100 minimum never
+            // touches the principal and the debt is never repaid.
+            const trap = [mkAccount({ id: 'acct_trap', name: 'Trap', type: 'credit', startingBalance: 5000, apr: 36, minPayment: 100 })];
+            const t0 = performance.now();
+            const res = payoffSchedule(trap, 0, 'avalanche');
+            const elapsed = performance.now() - t0;
+            assert(elapsed < 2000, 'payoffSchedule took ' + Math.round(elapsed) + 'ms — the loop is not bounded');
+            assert(res && Array.isArray(res.accounts) && res.accounts.length === 1, 'payoffSchedule() returned ' + show(res));
+            const row = res.accounts[0];
+            assertEqual(row.payoffDate, null, 'this debt is never repaid at this payment');
+            assertEqual(row.monthsToPayoff, null, 'and there is no month in which it clears');
+            assertEqual(res.debtFreeDate, null, 'so there is no debt-free date either');
+            assert(row.remaining > row.balance, 'the projection should show the balance growing, not shrinking');
+            const bad = [];
+            (function walk(v, path, depth) {
+                if (depth > 6) return;
+                if (typeof v === 'number') { if (!isFinite(v)) bad.push(path + ' = ' + v); return; }
+                if (v && typeof v === 'object' && !(v instanceof Date)) {
+                    Object.keys(v).forEach(function (k) { walk(v[k], path + '.' + k, depth + 1); });
+                }
+            })(res, 'result', 0);
+            assertEqual(bad.length, 0, 'a runaway loop leaked non-finite numbers into the result: ' + bad.join(', '));
+        });
+
+        it('a zero budget cannot repay anything, and says so', function () {
+            needFn();
+            const stuck = [mkAccount({ id: 'acct_stuck', name: 'Stuck', type: 'credit', startingBalance: 1000, apr: 20, minPayment: 0 })];
+            const res = payoffSchedule(stuck, 0, 'avalanche');
+            assertEqual(res.accounts[0].payoffDate, null, 'nothing is being paid, so nothing is ever cleared');
+            assertEqual(res.debtFreeDate, null);
+        });
+    });
+
+/* ───── Currency formatting ───── */
+
+describe('Currency formatting',
+    'fmtMoney reads state.settings.currency. Currencies differ in how many decimal places they ' +
+    'have, an unknown code must not poison every later value, and constructing an Intl formatter ' +
+    'per call is far too slow for a table of hundreds of cells.',
+    function () {
+        it('formats USD with two decimal places', function () {
+            withState(mkState({ settings: { currency: 'USD', forecastHorizon: '12', chartHorizons: {}, lastExportAt: null } }), function () {
+                const out = fmtMoney(1234.56);
+                assert(/1[.,   ]?234/.test(out), 'expected a grouped 1234 in ' + JSON.stringify(out));
+                assert(/56/.test(out), 'expected the cents in ' + JSON.stringify(out));
+            });
+        });
+
+        it('JPY has no decimal places', function () {
+            withState(mkState({ settings: { currency: 'JPY', forecastHorizon: '12', chartHorizons: {}, lastExportAt: null } }), function () {
+                const expected = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'JPY' }).format(1234.56);
+                assertEqual(fmtMoney(1234.56), expected,
+                    'the yen has no minor unit — fmtMoney must let the currency decide its fraction digits rather than hard-coding 2');
+            });
+        });
+
+        it('an unknown currency code falls back instead of throwing', function () {
+            withState(mkState({ settings: { currency: 'NOTACURRENCY', forecastHorizon: '12', chartHorizons: {}, lastExportAt: null } }), function () {
+                let out;
+                try { out = fmtMoney(1234.56); }
+                catch (e) { failWith('fmtMoney threw on an unknown currency code: ' + e.message); }
+                assert(typeof out === 'string' && out.length > 0, 'fmtMoney returned ' + show(out));
+                assert(/1[.,   ]?234/.test(out), 'the fallback should still be a readable number, got ' + JSON.stringify(out));
+            });
+        });
+
+        it('an unknown currency code does not degrade the next valid one', function () {
+            const bad = mkState({ settings: { currency: 'NOTACURRENCY', forecastHorizon: '12', chartHorizons: {}, lastExportAt: null } });
+            const good = mkState({ settings: { currency: 'EUR', forecastHorizon: '12', chartHorizons: {}, lastExportAt: null } });
+            withState(bad, function () { fmtMoney(1); });
+            withState(good, function () {
+                const out = fmtMoney(1234.56);
+                const expected = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR' }).format(1234.56);
+                assertEqual(out, expected, 'one bad code must not leave every later value unformatted');
+            });
+        });
+
+        it('repeated calls reuse a cached formatter', function () {
+            const RealNF = Intl.NumberFormat;
+            let ctorCalls = 0;
+            function SpyNF(...args) {
+                ctorCalls++;
+                return new RealNF(...args);
+            }
+            SpyNF.prototype = RealNF.prototype;
+            SpyNF.supportedLocalesOf = function (...args) { return RealNF.supportedLocalesOf(...args); };
+            Intl.NumberFormat = SpyNF;
+            try {
+                withState(mkState({ settings: { currency: 'CHF', forecastHorizon: '12', chartHorizons: {}, lastExportAt: null } }), function () {
+                    for (let i = 0; i < 30; i++) fmtMoney(i * 11.37);
+                });
+            } finally {
+                Intl.NumberFormat = RealNF;
+            }
+            assert(ctorCalls <= 1,
+                'fmtMoney built ' + ctorCalls + ' Intl.NumberFormat instances for 30 calls in one currency — it must cache one per currency');
+        });
+
+        it('handles NaN, Infinity and missing values without emitting them', function () {
+            withState(mkState(), function () {
+                [NaN, Infinity, -Infinity, undefined, null].forEach(function (v) {
+                    const out = fmtMoney(v);
+                    assert(typeof out === 'string', 'fmtMoney(' + show(v) + ') returned ' + show(out));
+                    assert(!/NaN|Infinity/.test(out), 'fmtMoney(' + show(v) + ') produced ' + JSON.stringify(out));
+                });
+            });
+        });
+
+        it('fmtPct rounds to one decimal place', function () {
+            assertEqual(fmtPct(12.34), '12.3%');
+            assertEqual(fmtPct(12.35), '12.4%');
+            assertEqual(fmtPct(0), '0.0%');
+            assertEqual(fmtPct(-4.06), '-4.1%');
+        });
+    });
+
+/* ───── Schema migration ───── */
+
+describe('Schema migration',
+    'migrate() must carry v1..v4 states forward, and must refuse a state written by a newer ' +
+    'build rather than quietly mangling it.',
+    function () {
+        it('SCHEMA_VERSION is 5', function () {
+            assertEqual(SCHEMA_VERSION, 5);
+        });
+
+        it('defaultState carries the v5 fields', function () {
+            const s = defaultState();
+            assertEqual(s.schemaVersion, SCHEMA_VERSION);
+            assertEqual(s.settings.lastExportAt, null, 'settings.lastExportAt defaults to null');
+        });
+
+        it('a v1 state migrates forward', function () {
+            const s = migrate({
+                schemaVersion: 1,
+                settings: { currency: 'USD', forecastMonths: 18 },
+                accounts: [{ id: 'a1', name: 'Checking', type: 'checking', startingBalance: 100 }],
+                categories: [{ id: 'cat_housing', name: 'Housing', kind: 'fixed', color: '#2563eb' }],
+                transactions: [{ id: 't1', name: 'Rent', kind: 'expense', amount: 900, frequency: 'monthly', startDate: '2020-01-01', categoryId: 'cat_housing' }]
+            });
+            assertEqual(s.schemaVersion, 5);
+            assertEqual(s.settings.forecastHorizon, '18', 'the old numeric forecastMonths becomes a horizon token');
+            assertEqual(s.settings.forecastMonths, undefined, 'and the old key is dropped');
+            assertEqual(s.settings.lastExportAt, null);
+            assertEqual(s.accounts[0].apr, 0, 'accounts gain apr');
+            assertEqual(s.accounts[0].minPayment, 0, 'accounts gain minPayment');
+            assertArrayEqual(s.transactions[0].tags, []);
+            assertEqual(s.transactions[0].escalation, 0);
+            assertEqual(s.transactions[0].paused, false);
+        });
+
+        it('a v2 state migrates forward', function () {
+            const s = migrate({
+                schemaVersion: 2,
+                settings: { currency: 'GBP', forecastMonths: 24 },
+                accounts: [{ id: 'a1', name: 'Card', type: 'credit', startingBalance: 500 }],
+                categories: structuredClone(DEFAULT_CATEGORIES),
+                transactions: []
+            });
+            assertEqual(s.schemaVersion, 5);
+            assertEqual(s.settings.forecastHorizon, '24');
+            assertEqual(s.accounts[0].apr, 0);
+            assertEqual(s.accounts[0].minPayment, 0);
+        });
+
+        it('a v3 state migrates forward', function () {
+            const s = migrate({
+                schemaVersion: 3,
+                settings: { currency: 'USD', forecastHorizon: 'eoy', chartHorizons: { balance: '24' } },
+                accounts: [{ id: 'a1', name: 'Savings', type: 'savings', startingBalance: 4000 }],
+                categories: structuredClone(DEFAULT_CATEGORIES),
+                transactions: []
+            });
+            assertEqual(s.schemaVersion, 5);
+            assertEqual(s.settings.forecastHorizon, 'eoy', 'an existing horizon token is left alone');
+            assertEqual(s.settings.chartHorizons.balance, '24', 'per-chart horizons survive');
+            assertEqual(s.accounts[0].apr, 0);
+        });
+
+        it('a v4 state gains only the v5 account and settings fields', function () {
+            const s = migrate({
+                schemaVersion: 4,
+                settings: { currency: 'USD', forecastHorizon: '12', chartHorizons: {} },
+                accounts: [
+                    { id: 'a1', name: 'Checking', type: 'checking', startingBalance: 1200 },
+                    { id: 'a2', name: 'Visa', type: 'credit', startingBalance: 800 }
+                ],
+                categories: structuredClone(DEFAULT_CATEGORIES),
+                transactions: []
+            });
+            assertEqual(s.schemaVersion, 5);
+            assertEqual(s.settings.lastExportAt, null);
+            s.accounts.forEach(function (a) {
+                assertEqual(a.apr, 0, a.name + '.apr');
+                assertEqual(a.minPayment, 0, a.name + '.minPayment');
+            });
+            assertEqual(s.accounts[0].startingBalance, 1200, 'existing balances are untouched');
+        });
+
+        it('an existing apr or minPayment is not overwritten', function () {
+            const s = migrate({
+                schemaVersion: 4,
+                settings: { currency: 'USD', forecastHorizon: '12', chartHorizons: {} },
+                accounts: [{ id: 'a1', name: 'Visa', type: 'credit', startingBalance: 800, apr: 19.99, minPayment: 35 }],
+                categories: structuredClone(DEFAULT_CATEGORIES),
+                transactions: []
+            });
+            assertClose(s.accounts[0].apr, 19.99, 1e-9);
+            assertEqual(s.accounts[0].minPayment, 35);
+        });
+
+        it('a state from a newer build is rejected', function () {
+            const err = assertThrows(function () {
+                migrate({
+                    schemaVersion: SCHEMA_VERSION + 1,
+                    settings: { currency: 'USD', forecastHorizon: '12', chartHorizons: {} },
+                    accounts: [], categories: [], transactions: []
+                });
+            }, 'migrate() must refuse a state written by a newer version of the app');
+            assert(err instanceof Error, 'migrate() threw ' + show(err) + ' — it must throw an Error so app.js can show the message');
+            assert(/version|newer|schema/i.test(err.message || ''),
+                'the error should say what is wrong, got ' + JSON.stringify(err.message || ''));
+        });
+
+        it('a state at the current version is accepted', function () {
+            const s = migrate({
+                schemaVersion: SCHEMA_VERSION,
+                settings: { currency: 'USD', forecastHorizon: '12', chartHorizons: {}, lastExportAt: null },
+                accounts: [], categories: structuredClone(DEFAULT_CATEGORIES), transactions: []
+            });
+            assertEqual(s.schemaVersion, SCHEMA_VERSION);
+        });
+
+        it('a deliberately deleted default category is not resurrected', function () {
+            const cats = structuredClone(DEFAULT_CATEGORIES).filter(function (c) { return c.id !== 'cat_dining'; });
+            const s = migrate({
+                schemaVersion: SCHEMA_VERSION,
+                settings: { currency: 'USD', forecastHorizon: '12', chartHorizons: {}, lastExportAt: null },
+                accounts: [], categories: cats, transactions: []
+            });
+            const back = s.categories.find(function (c) { return c.id === 'cat_dining'; });
+            assertEqual(back, undefined,
+                'the user deleted Dining — re-adding every default on load makes deleting one impossible');
+            assertEqual(s.categories.length, DEFAULT_CATEGORIES.length - 1);
+        });
+
+        it('a customised category colour survives migration', function () {
+            const cats = structuredClone(DEFAULT_CATEGORIES);
+            cats.find(function (c) { return c.id === 'cat_housing'; }).color = '#123456';
+            const s = migrate({
+                schemaVersion: 1,
+                settings: { currency: 'USD' },
+                accounts: [], categories: cats, transactions: []
+            });
+            assertEqual(s.categories.find(function (c) { return c.id === 'cat_housing'; }).color, '#123456');
+        });
+
+        it('a state with no categories at all is repopulated', function () {
+            const s = migrate({ schemaVersion: 1, settings: {}, accounts: [], categories: [], transactions: [] });
+            assertEqual(s.categories.length, DEFAULT_CATEGORIES.length,
+                'an empty category list is a fresh or broken state, not a deliberate deletion of all 18');
+        });
+    });
+
+/* ───── Insights ───── */
+
+function scanCards(cards, label) {
+    const bad = [];
+    (cards || []).forEach(function (c, i) {
+        Object.keys(c || {}).forEach(function (k) {
+            const v = c[k];
+            if (typeof v === 'number' && !isFinite(v)) bad.push(label + ' card[' + i + '].' + k + ' = ' + v);
+            if (typeof v === 'string' && /NaN|Infinity|undefined/.test(v)) bad.push(label + ' card[' + i + '].' + k + ' = ' + JSON.stringify(v));
+        });
+    });
+    return bad;
+}
+
+describe('Insights',
+    'Insight cards are read by a human. A card that says NaN, or a wall of cards on a state ' +
+    'with nothing in it, is worse than no card at all.',
+    function () {
+        it('an empty state produces no cards', function () {
+            withState(mkState(), function () {
+                const cards = computeInsights(buildForecast(12));
+                assert(Array.isArray(cards), 'computeInsights returned ' + show(cards));
+                assertEqual(cards.length, 0,
+                    'with no accounts and no transactions there is nothing to observe — got ' +
+                    (cards.length ? cards.map(function (c) { return c.label; }).join(', ') : ''));
+            });
+        });
+
+        it('a real state produces cards with the expected shape', function () {
+            const cash = mkAccount({ type: 'checking', startingBalance: 6000 });
+            const txs = [
+                mkTx({ kind: 'income',  amount: 2500, frequency: 'bi-weekly', startDate: todayIso(), categoryId: 'cat_salary',    accountId: cash.id }),
+                mkTx({ kind: 'expense', amount: 1600, frequency: 'monthly',   startDate: todayIso(), categoryId: 'cat_housing',   accountId: cash.id }),
+                mkTx({ kind: 'expense', amount: 45,   frequency: 'monthly',   startDate: todayIso(), categoryId: 'cat_subs',      accountId: cash.id }),
+                mkTx({ kind: 'expense', amount: 180,  frequency: 'weekly',    startDate: todayIso(), categoryId: 'cat_groceries', accountId: cash.id })
+            ];
+            withState(mkState({ accounts: [cash], transactions: txs }), function () {
+                const cards = computeInsights(buildForecast(12));
+                assert(cards.length > 0, 'a fully populated state should produce insight cards');
+                cards.forEach(function (c, i) {
+                    assert(typeof c.label === 'string' && c.label.length, 'card[' + i + '] has no label');
+                    assert(c.value !== undefined, 'card[' + i + '] (' + c.label + ') has no value');
+                    assert(typeof c.tone === 'string', 'card[' + i + '] (' + c.label + ') has no tone');
+                });
+            });
+        });
+
+        it('never emits NaN, Infinity or undefined in any card', function () {
+            const cases = {
+                empty: mkState(),
+                'no income': mkState({
+                    accounts: [mkAccount({ id: 'a_ni', type: 'checking', startingBalance: 0 })],
+                    transactions: [mkTx({ kind: 'expense', amount: 500, frequency: 'monthly', startDate: todayIso(), categoryId: 'cat_housing', accountId: 'a_ni' })]
+                }),
+                'no expense': mkState({
+                    accounts: [mkAccount({ id: 'a_ne', type: 'checking', startingBalance: 0 })],
+                    transactions: [mkTx({ kind: 'income', amount: 500, frequency: 'monthly', startDate: todayIso(), categoryId: 'cat_salary', accountId: 'a_ne' })]
+                }),
+                'zero amounts': mkState({
+                    accounts: [mkAccount({ id: 'a_z', type: 'checking', startingBalance: 0 })],
+                    transactions: [
+                        mkTx({ kind: 'income',  amount: 0, frequency: 'monthly', startDate: todayIso(), categoryId: 'cat_salary',  accountId: 'a_z' }),
+                        mkTx({ kind: 'expense', amount: 0, frequency: 'monthly', startDate: todayIso(), categoryId: 'cat_housing', accountId: 'a_z' })
+                    ]
+                }),
+                'debt only': mkState({
+                    accounts: [mkAccount({ id: 'a_d', type: 'credit', startingBalance: 4000, apr: 22, minPayment: 60 })]
+                })
+            };
+            const bad = [];
+            Object.keys(cases).forEach(function (name) {
+                withState(cases[name], function () {
+                    bad.push.apply(bad, scanCards(computeInsights(buildForecast(12)), name + ':'));
+                });
+            });
+            assertEqual(bad.length, 0, 'non-finite values leaked into insight cards:\n  ' + bad.join('\n  '));
+        });
+
+        it('survives a state with categories missing from its transactions', function () {
+            const cash = mkAccount({ id: 'a_orph', type: 'checking', startingBalance: 100 });
+            const orphan = mkTx({ kind: 'expense', amount: 60, frequency: 'monthly',
+                                  startDate: todayIso(), categoryId: 'cat_does_not_exist', accountId: 'a_orph' });
+            withState(mkState({ accounts: [cash], transactions: [orphan] }), function () {
+                const cards = computeInsights(buildForecast(12));
+                assertEqual(scanCards(cards, 'orphan:').length, 0);
+            });
+        });
+    });
+
+/* ───── Sorting ───── */
+
+describe('Table sorting',
+    'applySort backs every sortable column in the app.',
+    function () {
+        const rows = [
+            { name: 'Beta',  n: 9,    d: '2026-03-01' },
+            { name: 'alpha', n: 10,   d: null },
+            { name: 'Gamma', n: null, d: '2026-01-01' }
+        ];
+        const acc = {
+            name: function (r) { return r.name; },
+            n: function (r) { return r.n; }
+        };
+
+        it('sorts numbers numerically, not as text', function () {
+            const out = applySort(rows, { column: 'n', direction: 'asc' }, acc);
+            assertArrayEqual(out.map(function (r) { return r.n; }), [9, 10, null],
+                '10 must come after 9, and a null sorts last');
+        });
+
+        it('sorts text case-insensitively', function () {
+            const out = applySort(rows, { column: 'name', direction: 'asc' }, acc);
+            assertArrayEqual(out.map(function (r) { return r.name; }), ['alpha', 'Beta', 'Gamma']);
+        });
+
+        it('keeps nulls last in both directions', function () {
+            const asc  = applySort(rows, { column: 'n', direction: 'asc' }, acc);
+            const desc = applySort(rows, { column: 'n', direction: 'desc' }, acc);
+            assertEqual(asc[asc.length - 1].n, null);
+            assertEqual(desc[desc.length - 1].n, null, 'a missing value is not "the biggest"');
+        });
+
+        it('does not mutate the array it was given', function () {
+            const original = rows.map(function (r) { return r.name; });
+            applySort(rows, { column: 'n', direction: 'desc' }, acc);
+            assertArrayEqual(rows.map(function (r) { return r.name; }), original);
+        });
+
+        it('returns the rows untouched when no column is set', function () {
+            assertArrayEqual(applySort(rows, { column: null, direction: 'asc' }, acc).map(function (r) { return r.name; }),
+                rows.map(function (r) { return r.name; }));
+            assertArrayEqual(applySort(rows, { column: 'nope', direction: 'asc' }, acc).map(function (r) { return r.name; }),
+                rows.map(function (r) { return r.name; }));
+        });
+    });
+
+/* ───── Constraint guard (SEC-10) ───── */
+
+const SOURCE_CACHE = {};
+async function source(name) {
+    if (SOURCE_CACHE[name] === undefined) {
+        const res = await fetch(name, { cache: 'no-store' });
+        if (!res.ok) throw new Error('could not read ' + name + ' (HTTP ' + res.status + ')');
+        SOURCE_CACHE[name] = await res.text();
+    }
+    return SOURCE_CACHE[name];
+}
+
+const OVER_HTTP = location.protocol === 'http:' || location.protocol === 'https:';
+
+function requireHttp() {
+    if (!OVER_HTTP) {
+        skip('this section reads the app\'s own source files, and only http(s) allows that — this ' +
+             'page is on ' + location.protocol + '. Run `python3 -m http.server` in the project ' +
+             'folder and open http://localhost:8000/tests.html');
+    }
+}
+
+function scanLines(text, re) {
+    const hits = [];
+    text.split('\n').forEach(function (line, i) {
+        if (re.test(line)) hits.push('line ' + (i + 1) + ': ' + line.trim().slice(0, 100));
+    });
+    return hits;
+}
+
+function collect(text, re) {
+    const out = [];
+    let m;
+    re.lastIndex = 0;
+    while ((m = re.exec(text)) !== null) out.push(m[1]);
+    return out;
+}
+
+describe('Constraint guard — nothing may leave the machine',
+    'These read engine.js, app.js and index.html as text and check the promise directly, so it ' +
+    'outlives anyone\'s memory of having made it. Only runs over http(s): file:// blocks the reads.',
+    function () {
+        const APP_FILES = ['engine.js', 'app.js', 'index.html'];
+
+        // Only the anchors a human clicks. Nothing here loads a resource.
+        const ALLOWED_LINKS = [
+            'https://observation-deck.netlify.app/',
+            'https://github.com/00xJS/cashflow-compass'
+        ];
+
+        const NETWORK_APIS = [
+            { name: 'fetch(',           re: /\bfetch\s*\(/ },
+            { name: 'XMLHttpRequest',   re: /\bXMLHttpRequest\b/ },
+            { name: 'WebSocket',        re: /\bWebSocket\b/ },
+            { name: 'sendBeacon',       re: /\bsendBeacon\b/ },
+            { name: 'EventSource',      re: /\bEventSource\b/ },
+            { name: 'RTCPeerConnection', re: /\bRTCPeerConnection\b/ }
+        ];
+
+        APP_FILES.forEach(function (file) {
+            it(file + ' calls no network API', async function () {
+                requireHttp();
+                const text = await source(file);
+                const hits = [];
+                NETWORK_APIS.forEach(function (api) {
+                    scanLines(text, api.re).forEach(function (h) { hits.push(api.name + ' — ' + h); });
+                });
+                assertEqual(hits.length, 0, file + ' reaches for the network:\n  ' + hits.join('\n  '));
+            });
+        });
+
+        APP_FILES.forEach(function (file) {
+            it(file + ' loads no external resource', async function () {
+                requireHttp();
+                const text = await source(file);
+                const srcs = collect(text, /\bsrc\s*=\s*["']?(https?:\/\/[^"'\s>]+)/gi);
+                assertEqual(srcs.length, 0, file + ' pulls in something from another origin: ' + srcs.join(', '));
+                const cssUrls = collect(text, /url\(\s*["']?(https?:\/\/[^"')\s]+)/gi)
+                    .concat(collect(text, /@import\s+["'](https?:\/\/[^"']+)/gi));
+                assertEqual(cssUrls.length, 0, file + ' loads a stylesheet asset from another origin: ' + cssUrls.join(', '));
+            });
+        });
+
+        APP_FILES.forEach(function (file) {
+            it(file + ' links out only to documented destinations', async function () {
+                requireHttp();
+                const text = await source(file);
+                const stray = collect(text, /\bhref\s*=\s*["']?(https?:\/\/[^"'\s>]+)/gi).filter(function (u) {
+                    return !ALLOWED_LINKS.some(function (ok) { return u.indexOf(ok) === 0; });
+                });
+                assertEqual(stray.length, 0, file + ' links to an undocumented external address: ' + stray.join(', '));
+            });
+        });
+
+        it('index.html has no inline script', async function () {
+            requireHttp();
+            const html = await source('index.html');
+            const inline = html.match(/<script(?![^>]*\bsrc\s*=)[^>]*>/gi) || [];
+            assertEqual(inline.length, 0,
+                'the deployed Content-Security-Policy uses script-src \'self\' with no \'unsafe-inline\'. ' +
+                'An inline <script> in index.html would either break the app or force that policy to be ' +
+                'weakened. Found: ' + inline.join(', '));
+        });
+
+        it('index.html has no inline event handlers', async function () {
+            requireHttp();
+            const html = await source('index.html');
+            const handlers = html.match(/\son[a-z]+\s*=\s*["']/gi) || [];
+            assertEqual(handlers.length, 0,
+                'inline handlers are inline script, and would need script-src \'unsafe-inline\'. Found: ' +
+                handlers.join(', '));
+        });
+
+        it('sw.js talks to nothing off this origin', async function () {
+            requireHttp();
+            let text;
+            try { text = await source('sw.js'); }
+            catch (e) { skip('sw.js is not being served here (' + e.message + ')'); }
+            const urls = collect(text, /["'`](https?:\/\/[^"'`\s]+)/gi);
+            assertEqual(urls.length, 0, 'the service worker references an external address: ' + urls.join(', '));
+            assert(/self\.location\.origin/.test(text), 'the service worker should compare against its own origin before handling a request');
+        });
+
+        it('netlify.toml keeps script-src free of unsafe-inline', async function () {
+            requireHttp();
+            let toml;
+            try { toml = await source('netlify.toml'); }
+            catch (e) { skip('netlify.toml is not served here (' + e.message + ') — it is build config, not site content'); }
+            assert(/Content-Security-Policy/.test(toml), 'netlify.toml no longer sends a Content-Security-Policy');
+            const csp = (toml.match(/Content-Security-Policy\s*=\s*"([^"]*)"/) || [])[1] || '';
+            const scriptSrc = (csp.match(/script-src([^;]*)/) || [])[1] || '';
+            assert(scriptSrc.indexOf('unsafe-inline') === -1,
+                'script-src has been weakened with \'unsafe-inline\': ' + scriptSrc.trim());
+            assert(scriptSrc.indexOf('unsafe-eval') === -1,
+                'script-src has been weakened with \'unsafe-eval\': ' + scriptSrc.trim());
+            ['default-src', 'object-src', 'base-uri', 'frame-ancestors', 'form-action'].forEach(function (d) {
+                assert(csp.indexOf(d) !== -1, 'the policy no longer sets ' + d);
+            });
+        });
+    });
+
+/* ───── Runner and rendering ───── */
+
+function elem(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+}
+
+function firstFrame(stack) {
+    const lines = String(stack).split('\n');
+    for (let i = 0; i < lines.length; i++) {
+        if (/tests\.html|engine\.js/.test(lines[i])) return lines[i].trim();
+    }
+    return '';
+}
+
+async function runAll() {
+    const results = document.getElementById('results');
+    const banner = document.getElementById('banner');
+    results.textContent = '';
+
+    banner.className = 'banner';
+    banner.textContent = '';
+    if (!ENGINE_OK) {
+        banner.className = 'banner bad';
+        banner.textContent = 'engine.js did not load, or threw while loading. Every test below will ' +
+            'fail until it parses — check the browser console for the parse error.';
+    } else if (!OVER_HTTP) {
+        banner.textContent = 'Running from ' + location.protocol + ' — the engine suites all work here, ' +
+            'but the constraint-guard section is skipped because a page served this way is not allowed ' +
+            'to read its sibling files. To run everything: python3 -m http.server in the project folder, ' +
+            'then open http://localhost:8000/tests.html';
+    } else {
+        banner.textContent = 'Running over ' + location.protocol + ' — the constraint-guard section is active.';
+    }
+
+    let pass = 0, failed = 0, skipped = 0;
+    const t0 = performance.now();
+
+    for (const suite of SUITES) {
+        const sec = elem('section', 'suite');
+        const head = elem('div', 'suite-head');
+        head.appendChild(elem('h2', null, suite.name));
+        const count = elem('span', 'suite-count');
+        head.appendChild(count);
+        sec.appendChild(head);
+        if (suite.note) sec.appendChild(elem('p', 'suite-note', suite.note));
+        const list = elem('ul', 'cases');
+        sec.appendChild(list);
+        results.appendChild(sec);
+
+        let sp = 0, sf = 0, ss = 0;
+
+        for (const test of suite.tests) {
+            // Snapshot around every test so a test that assigns `state` and then
+            // throws cannot leak that state into the next one.
+            const stateBefore = ENGINE_OK ? state : undefined;
+            let status = 'pass', detail = '';
+            const started = performance.now();
+            try {
+                await test.fn();
+            } catch (err) {
+                if (err instanceof SkipSignal) {
+                    status = 'skip';
+                    detail = err.reason;
+                } else {
+                    status = 'fail';
+                    detail = (err && err.message) || String(err);
+                    const frame = err && err.stack ? firstFrame(err.stack) : '';
+                    if (frame) detail += '\n    at ' + frame;
+                }
+            } finally {
+                if (ENGINE_OK) state = stateBefore;
+            }
+            const ms = performance.now() - started;
+
+            if (status === 'pass') { pass++; sp++; }
+            else if (status === 'skip') { skipped++; ss++; }
+            else { failed++; sf++; }
+
+            const li = elem('li', 'case ' + status);
+            li.appendChild(elem('span', 'mark', status === 'pass' ? '✓' : status === 'skip' ? '○' : '✗'));
+            li.appendChild(elem('span', 'name', test.name));
+            li.appendChild(elem('span', 'ms', ms >= 1 ? Math.round(ms) + 'ms' : ''));
+            if (detail) li.appendChild(elem('div', 'detail', detail));
+            list.appendChild(li);
+        }
+
+        if (sf === 0 && ss === 0) sec.classList.add('all-pass');
+        count.appendChild(elem('span', 'p', sp + ' passed'));
+        if (sf) { count.appendChild(document.createTextNode('  ')); count.appendChild(elem('span', 'f', sf + ' failed')); }
+        if (ss) { count.appendChild(document.createTextNode('  ')); count.appendChild(elem('span', 's', ss + ' skipped')); }
+
+        // Let the browser paint between suites so a long run does not look frozen.
+        await new Promise(function (r) { setTimeout(r, 0); });
+    }
+
+    const elapsed = Math.round(performance.now() - t0);
+    const total = pass + failed + skipped;
+
+    const summary = document.getElementById('summary');
+    summary.textContent = '';
+    [
+        ['total', total, 'tests'],
+        ['ok', pass, 'passed'],
+        ['bad', failed, 'failed'],
+        ['warn', skipped, 'skipped'],
+        ['time', elapsed + 'ms', 'elapsed']
+    ].forEach(function (t) {
+        const tile = elem('div', 'tile ' + t[0]);
+        tile.appendChild(elem('span', 'n', String(t[1])));
+        tile.appendChild(elem('span', 'k', t[2]));
+        summary.appendChild(tile);
+    });
+
+    const verdict = document.getElementById('verdict');
+    verdict.textContent = '';
+    const badge = elem('div', 'verdict ' + (failed === 0 ? 'ok' : 'bad'),
+        failed === 0
+            ? 'ALL GREEN — ' + pass + '/' + total + ' passing' + (skipped ? ', ' + skipped + ' skipped' : '')
+            : failed + ' FAILING — ' + pass + '/' + total + ' passing' + (skipped ? ', ' + skipped + ' skipped' : ''));
+    verdict.appendChild(badge);
+
+    document.title = (failed === 0 ? '✓ ' : '✗ ') + pass + '/' + total +
+        (failed ? ' — ' + failed + ' failing' : ' passing') +
+        (skipped ? ' (' + skipped + ' skipped)' : '') +
+        ' — Compass tests';
+}
+
+document.getElementById('failsOnly').addEventListener('change', function (e) {
+    document.body.classList.toggle('fails-only', e.target.checked);
+});
+document.getElementById('rerun').addEventListener('click', function () { runAll(); });
+
+runAll();
+</script>
+</body>
+</html>
