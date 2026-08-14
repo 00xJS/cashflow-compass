@@ -13,6 +13,10 @@
 const SCHEMA_VERSION = 4;
 const STORAGE_KEY = 'projectBudgetingState';
 
+// Declared here rather than in app.js so engine.js is self-contained: the pure
+// functions below read it, and tests.html can assign it without loading app.js.
+let state = null;
+
 // Horizon options shared by global selector + per-chart toggles.
 // '' is per-chart only and means "match global".
 const HORIZON_OPTIONS = [
