@@ -178,6 +178,13 @@ const V5_CSS = `
     overflow: hidden;
 }
 .v5-bar > span { display: block; height: 100%; background: var(--accent); }
+.v5-chart {
+    display: block;
+    width: 100%;
+    min-height: 220px;
+    max-height: 280px;
+    margin-bottom: 10px;
+}
 .v5-div {
     position: relative;
     height: 14px;
@@ -297,6 +304,7 @@ button.v5-day:hover { border-color: var(--border-hover); }
 @media (max-width: 700px) {
     .v5-card { padding: 14px 14px; }
     .v5-figure { font-size: 1.6rem; }
+    .v5-chart { min-height: 180px; max-height: 220px; }
     .v5-day { min-height: 48px; padding: 4px; }
     .v5-day .dnet { font-size: 10.5px; }
     .v5-day .dcount { display: none; }
@@ -321,7 +329,8 @@ const v5ui = {
     calDay: null,
     debtExtra: 0,
     editScenarioId: null,
-    renamingId: null
+    renamingId: null,
+    checkinChartId: null
 };
 
 function v5esc(s) {
@@ -399,6 +408,24 @@ function v5Tint(color, alpha) {
 function v5Var(name, fallback) {
     if (typeof cssVar === 'function') return cssVar(name, fallback);
     return fallback;
+}
+function v5Short(value) {
+    const d = v5ToDate(value);
+    if (!d) return '';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+// Before a write the user cannot eyeball afterwards. Undo is the better safety
+// net because it is one click; a backup file is the fallback when this build has
+// no undo stack at all.
+function v5SafetyNet(label) {
+    if (typeof snapshotForUndo === 'function') { snapshotForUndo(label); return; }
+    if (typeof writeBackup === 'function') writeBackup(label);
+}
+
+function v5HasChart() {
+    if (typeof hasCharting === 'function') return hasCharting();
+    return typeof Chart !== 'undefined' && !!Chart;
 }
 
 // The markup owns the card chrome when it wraps a panel in one; when it hands
@@ -526,6 +553,18 @@ function v5EngineMissing(name) {
 
 /* ───── FEAT-02 · Balance check-ins ───── */
 
+// The history plot lives on a canvas the repaint below throws away, so the
+// chart it belongs to has to go with it or Chart.js keeps redrawing into a node
+// that is no longer in the document.
+let v5CheckinChart = null;
+
+function v5DropCheckinChart() {
+    if (!v5CheckinChart) return;
+    try { v5CheckinChart.destroy(); }
+    catch (e) { /* the canvas is already gone; nothing left to release */ }
+    v5CheckinChart = null;
+}
+
 function renderCheckinPanel(forecast) {
     const checkins = v5Coll('checkins');
     const shell = v5Shell('panelCheckin', 'Balance check-ins',
@@ -534,8 +573,11 @@ function renderCheckinPanel(forecast) {
 
     const accounts = Array.isArray(state.accounts) ? state.accounts : [];
     const drift = v5Drift(forecast, checkins);
+    const history = v5CheckinHistory(forecast, checkins);
+    v5DropCheckinChart();
     const html = [
         v5DriftHero(drift, checkins),
+        history.html,
         v5CheckinForm(accounts),
         v5CheckinList(checkins, accounts)
     ].join('');
@@ -548,10 +590,17 @@ function renderCheckinPanel(forecast) {
         },
         click: e => {
             const hit = v5Act(e);
-            if (!hit || hit.act !== 'checkin-del') return;
-            v5DeleteCheckin(hit.id);
+            if (!hit) return;
+            if (hit.act === 'checkin-del') v5DeleteCheckin(hit.id);
+            else if (hit.act === 'checkin-anchor') v5ReAnchor(hit.id);
+        },
+        change: e => {
+            if (!e.target.matches('[data-v5act="checkin-chart"]')) return;
+            v5ui.checkinChartId = e.target.value;
+            renderCheckinPanel(v5Forecast());
         }
     });
+    if (history.series) v5DrawCheckinChart(history.series);
 }
 
 function v5Drift(forecast, checkins) {
@@ -598,15 +647,17 @@ function v5DriftHero(drift, checkins) {
 
     const byAccount = Array.isArray(drift.byAccount) ? drift.byAccount : [];
     const perAccount = byAccount.length ? `<div class="table-wrap"><table>
-            <thead><tr><th>Account</th><th>Checked on</th><th class="num">Forecast said</th><th class="num">You had</th><th class="num">Gap</th></tr></thead>
+            <thead><tr><th>Account</th><th>Checked on</th><th class="num">Forecast said</th><th class="num">You had</th><th class="num">Gap</th><th class="num">Actions</th></tr></thead>
             <tbody>${byAccount.map(row => {
                 const rowGap = Number.isFinite(row.drift) ? row.drift : v5Num(row.actual, 0) - v5Num(row.expected, 0);
+                const name = row.name || v5AccountName(row.accountId) || 'Account';
                 return `<tr>
-                    <td>${v5esc(row.name || v5AccountName(row.accountId) || 'Account')}${row.credit ? ' <span class="tag">credit</span>' : ''}</td>
+                    <td>${v5esc(name)}${row.credit ? ' <span class="tag">credit</span>' : ''}</td>
                     <td>${v5esc(v5Long(row.date))}</td>
                     <td class="num">${v5esc(v5Money(v5Num(row.expected, 0)))}</td>
                     <td class="num">${v5esc(v5Money(v5Num(row.actual, 0)))}</td>
                     <td class="num ${rowGap < 0 ? 'v5-neg' : rowGap > 0 ? 'v5-pos' : ''}">${v5esc(v5Signed(rowGap))}</td>
+                    <td class="num row-actions">${v5AnchorButton(row, checkins, name)}</td>
                 </tr>`;
             }).join('')}</tbody>
         </table></div>` : '';
@@ -648,9 +699,270 @@ function v5DriftBand(gap, pct) {
         return { tone: 'pos', text: 'v5-pos', advice: 'The plan is tracking reality closely — nothing here needs attention.' };
     }
     if (near) {
-        return { tone: 'warn', text: 'v5-warnc', advice: 'A gap this size is normal drift. Update an account’s starting balance and as-of date when you want the forecast to start from today’s truth.' };
+        return { tone: 'warn', text: 'v5-warnc', advice: 'A gap this size is normal drift. Re-anchor an account when you want the forecast to start again from today’s truth.' };
     }
-    return { tone: 'neg', text: 'v5-neg', advice: 'The forecast and your real balance have parted company. Re-state the account balance with today’s as-of date, then look for anything real that the plan does not know about.' };
+    return { tone: 'neg', text: 'v5-neg', advice: 'The forecast and your real balance have parted company. Re-anchor the account to the balance you actually have, then look for anything real that the plan does not know about.' };
+}
+
+// The re-anchor is offered against a check-in that is still on file, so the
+// figures in the confirm can be read off the record rather than off the table.
+function v5AnchorButton(row, checkins, name) {
+    const accountId = row && row.accountId;
+    if (!accountId) return '<span class="muted-text">—</span>';
+    const onFile = (Array.isArray(state.accounts) ? state.accounts : []).some(a => a.id === accountId);
+    if (!onFile) return '<span class="muted-text">not on file</span>';
+    const id = row.checkinId && checkins.some(c => c.id === row.checkinId)
+        ? row.checkinId
+        : v5LatestCheckinId(accountId, checkins);
+    if (!id) return '<span class="muted-text">—</span>';
+    return `<button type="button" data-v5act="checkin-anchor" data-id="${v5esc(id)}"
+        aria-label="Re-anchor ${v5esc(name)} to the balance recorded on ${v5esc(v5Long(row.date) || 'this check-in')}"
+        title="Start the forecast again from this recorded balance">Re-anchor</button>`;
+}
+
+function v5LatestCheckinId(accountId, checkins) {
+    const list = (checkins || v5Coll('checkins')).filter(c => c && c.accountId === accountId && c.id);
+    if (!list.length) return '';
+    const newest = list.reduce((best, c) =>
+        String(c.date || '') > String(best.date || '') ? c : best, list[0]);
+    return newest.id || '';
+}
+
+// Every projection on the deck is built on the starting balance, so this is the
+// most consequential write in the file — hence the confirm that spells out both
+// numbers before either moves.
+function v5ReAnchor(checkinId) {
+    const checkin = v5Coll('checkins').find(c => c.id === checkinId);
+    if (!checkin) return;
+    const account = (Array.isArray(state.accounts) ? state.accounts : []).find(a => a.id === checkin.accountId);
+    if (!account) {
+        v5Toast('That check-in belongs to an account that is no longer on file.', 'warning');
+        return;
+    }
+    // A card's starting balance is held as the amount owed, so the sign the
+    // check-in was typed with must not survive into the account.
+    const credit = account.type === 'credit';
+    const balance = v5Num(checkin.balance, 0);
+    const nextBalance = v5Round(credit ? Math.abs(balance) : balance);
+    const nextDate = checkin.date || v5Date(new Date());
+    const fromBalance = v5Num(account.startingBalance, 0);
+    const fromDate = account.asOfDate || '';
+
+    if (Math.abs(nextBalance - fromBalance) < 0.005 && fromDate === nextDate) {
+        v5Toast('The forecast already starts from this check-in.', 'info');
+        return;
+    }
+
+    const name = account.name || 'This account';
+    const body = `${name} currently starts the forecast at ${v5Money(fromBalance)}` +
+        (fromDate ? ` as of ${v5Long(fromDate)}` : ' with no as-of date') +
+        `. Re-anchoring rewrites that to ${v5Money(nextBalance)}${credit ? ' owed' : ''} as of ${v5Long(nextDate)}. ` +
+        'Every projection on the deck is built on that number, so the whole forecast moves with it. This can be undone.';
+    const apply = () => {
+        v5SafetyNet('re-anchoring ' + name);
+        account.startingBalance = nextBalance;
+        account.asOfDate = nextDate;
+        v5Commit(`Re-anchored ${name} to ${v5Money(nextBalance)}.`);
+    };
+    if (typeof confirmModal === 'function') {
+        confirmModal('Re-anchor this account?', body, apply, { confirmLabel: 'Re-anchor' });
+    } else {
+        apply();
+    }
+}
+
+/* ───── Check-in history ───── */
+
+function v5AccountEntry(forecast, accountId) {
+    if (!forecast || !accountId) return null;
+    const list = Array.isArray(forecast.accountsList) ? forecast.accountsList : [];
+    const found = list.find(a => a && a.id === accountId);
+    if (found) return found;
+    return (forecast.unassigned && forecast.unassigned.id === accountId) ? forecast.unassigned : null;
+}
+
+// The engine walks an account from its own snapshot to a date; the same walk is
+// written out here so the history still draws in a build that does not export it.
+function v5ProjectAt(entry, when) {
+    if (!entry) return 0;
+    if (typeof projectedAccountBalance === 'function') {
+        try {
+            const value = projectedAccountBalance(entry, when);
+            if (Number.isFinite(value)) return value;
+        } catch (e) { /* fall through to the local walk */ }
+    }
+    let balance = Number.isFinite(entry.startRaw) ? entry.startRaw : v5Num(entry.start, 0);
+    const key = v5Date(when);
+    (entry.dayNet || []).forEach(step => { if (step && step.key <= key) balance += v5Num(step.delta, 0); });
+    return balance;
+}
+
+function v5CheckinReadings(checkins, accountId) {
+    return checkins
+        .filter(c => c && c.accountId === accountId && v5ToDate(c.date) && Number.isFinite(parseFloat(c.balance)))
+        .map(c => ({ date: v5ToDate(c.date), actual: parseFloat(c.balance) }))
+        .sort((a, b) => a.date - b.date);
+}
+
+// A projection only runs forward. A reading taken before the balance the
+// forecast starts from cannot be projected to, so comparing the two would invent
+// a gap out of the order the numbers were entered in.
+function v5CheckinBaseline(forecast, accountId) {
+    const account = (Array.isArray(state.accounts) ? state.accounts : []).find(a => a.id === accountId);
+    const stated = account ? v5ToDate(account.asOfDate) : null;
+    const scanned = v5ToDate(forecast.cutoffDate);
+    if (stated && scanned) return stated > scanned ? stated : scanned;
+    return stated || scanned || null;
+}
+
+// One reading is a snapshot of the gap; two are the first thing that can answer
+// whether the plan is getting closer to your life or further from it.
+function v5CheckinHistory(forecast, checkins) {
+    const nothing = { html: '', series: null };
+    if (!forecast || !checkins.length) return nothing;
+
+    const ids = [];
+    checkins.forEach(c => {
+        if (!c || !c.accountId || ids.indexOf(c.accountId) > -1) return;
+        if (v5AccountEntry(forecast, c.accountId)) ids.push(c.accountId);
+    });
+    if (!ids.length) return nothing;
+
+    const groups = {};
+    ids.forEach(id => {
+        const readings = v5CheckinReadings(checkins, id);
+        const baseline = v5CheckinBaseline(forecast, id);
+        const comparable = baseline ? readings.filter(r => r.date >= baseline) : readings;
+        groups[id] = { comparable, dropped: readings.length - comparable.length };
+    });
+
+    const rank = (a, b) => groups[b].comparable.length - groups[a].comparable.length;
+    const heading = '<hr class="v5-sep"><div class="v5-label">Forecast vs reality over time</div>';
+    const eligible = ids.filter(id => groups[id].comparable.length >= 2);
+    if (!eligible.length) {
+        const best = ids.slice().sort(rank)[0];
+        return { html: heading + v5HistoryWaiting(best, groups[best]), series: null };
+    }
+
+    let chosen = v5ui.checkinChartId;
+    if (!chosen || eligible.indexOf(chosen) < 0) {
+        chosen = eligible.slice().sort(rank)[0];
+        v5ui.checkinChartId = chosen;
+    }
+
+    const entry = v5AccountEntry(forecast, chosen);
+    const series = groups[chosen].comparable
+        .map(point => ({ date: point.date, actual: point.actual, expected: v5ProjectAt(entry, point.date) }));
+    const name = v5AccountName(chosen) || (entry && entry.name) || 'this account';
+    const chooser = eligible.length > 1
+        ? `<div class="v5-row">
+                <div class="v5-field grow">
+                    <label class="v5-label" for="v5CheckinChartAcct">Account plotted</label>
+                    <select id="v5CheckinChartAcct" data-keep="checkinChartAcct" data-v5act="checkin-chart">
+                        ${eligible.map(id => `<option value="${v5esc(id)}"${id === chosen ? ' selected' : ''}>${v5esc(v5AccountName(id) || 'Account')} — ${groups[id].comparable.length} readings</option>`).join('')}
+                    </select>
+                </div>
+            </div>`
+        : '';
+
+    const label = `Line chart of what the forecast projected for ${name} against the balance you recorded, ` +
+        `at each of ${series.length} check-ins from ${v5Long(series[0].date)} to ${v5Long(series[series.length - 1].date)}.`;
+    const canvas = v5HasChart()
+        ? `<canvas class="v5-chart" id="v5CheckinChart" role="img" aria-label="${v5esc(label)}"></canvas>`
+        : '<div class="v5-empty">This plot needs <code>vendor/chart.umd.min.js</code>, which did not load. The readings themselves are listed below.</div>';
+
+    return {
+        html: heading + chooser + canvas +
+            `<p class="v5-note">${v5esc(v5TrendSentence(series, name))}</p>` +
+            v5DroppedNote(groups[chosen].dropped) +
+            '<p class="v5-note">Each forecast point walks this account forward from the balance the forecast starts at, so re-anchoring moves the projected line and the comparison begins again from that day.</p>',
+        series: v5HasChart() ? series : null
+    };
+}
+
+function v5HistoryWaiting(accountId, group) {
+    const name = v5esc(v5AccountName(accountId) || 'this account');
+    if (!group.comparable.length) {
+        return `<div class="v5-empty">Every reading on <strong>${name}</strong> was taken before the balance the forecast now starts from, ` +
+            'so there is nothing left to compare them against. Log a new one and the plot of forecast against reality begins from there.</div>';
+    }
+    return `<div class="v5-empty">There is one reading on <strong>${name}</strong> since the forecast’s starting balance was stated, ` +
+        'and it says how far off the forecast is today. A second says which way that is moving: log another in a week or two and this becomes ' +
+        'a plot of what the forecast projected against what you actually had, oldest to newest.</div>';
+}
+
+function v5DroppedNote(dropped) {
+    if (!dropped) return '';
+    const one = dropped === 1;
+    return `<p class="v5-note">${v5esc(`${dropped} earlier ${v5Plural(dropped, 'reading')} ${one ? 'is' : 'are'} not plotted: ` +
+        `${one ? 'it was' : 'they were'} taken before the balance the forecast starts from, so there is nothing to project ${one ? 'it' : 'them'} against.`)}</p>`;
+}
+
+function v5TrendSentence(series, name) {
+    const first = Math.abs(series[0].actual - series[0].expected);
+    const last = Math.abs(series[series.length - 1].actual - series[series.length - 1].expected);
+    const readings = `${series.length} readings on ${name}`;
+    if (last < first - 0.005) {
+        return `The gap has narrowed from ${v5Money(first)} to ${v5Money(last)} across ${readings} — the plan is describing this account more closely than it did.`;
+    }
+    if (last > first + 0.005) {
+        return `The gap has widened from ${v5Money(first)} to ${v5Money(last)} across ${readings} — something real is happening that the plan does not know about.`;
+    }
+    return `The gap has held at about ${v5Money(last)} across ${readings}.`;
+}
+
+function v5DrawCheckinChart(series) {
+    const canvas = document.getElementById('v5CheckinChart');
+    if (!canvas || !v5HasChart()) return;
+    if (typeof deckChartTheme === 'function') {
+        try { deckChartTheme(); }
+        catch (e) { /* the deck's chart defaults are a nicety, not a requirement */ }
+    }
+    const projected = v5Var('--accent', '#ff9a44');
+    const recorded = v5Var('--live', '#3ddc84');
+    try {
+        v5CheckinChart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: series.map(p => v5Short(p.date)),
+                datasets: [
+                    {
+                        label: 'Forecast said',
+                        data: series.map(p => v5Round(p.expected)),
+                        borderColor: projected,
+                        backgroundColor: v5Tint(projected, 0.12),
+                        borderDash: [5, 4],
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        tension: 0.25
+                    },
+                    {
+                        label: 'You had',
+                        data: series.map(p => v5Round(p.actual)),
+                        borderColor: recorded,
+                        backgroundColor: v5Tint(recorded, 0.12),
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        tension: 0.25
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { labels: { boxWidth: 12 } },
+                    tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${v5Money(ctx.parsed.y)}` } }
+                },
+                scales: {
+                    y: { ticks: { callback: value => v5Money(value) } }
+                }
+            }
+        });
+    } catch (e) {
+        console.error('[Cashflow Compass] the check-in history could not be drawn', e);
+    }
 }
 
 function v5CheckinForm(accounts) {
@@ -686,21 +998,32 @@ function v5CheckinList(checkins, accounts) {
     const rows = checkins.slice()
         .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
         .slice(0, 8)
-        .map(c => `<tr>
-            <td>${v5esc(v5Long(c.date) || c.date || '')}</td>
-            <td>${v5esc(v5AccountName(c.accountId) || 'Account no longer on file')}</td>
+        .map(c => {
+            const name = v5AccountName(c.accountId);
+            const when = v5Long(c.date) || c.date || '';
+            const anchor = name
+                ? `<button type="button" data-v5act="checkin-anchor" data-id="${v5esc(c.id)}"
+                    aria-label="Re-anchor ${v5esc(name)} to the balance recorded on ${v5esc(when || 'this date')}"
+                    title="Start the forecast again from this recorded balance">Re-anchor</button>`
+                : '';
+            return `<tr>
+            <td>${v5esc(when)}</td>
+            <td>${v5esc(name || 'Account no longer on file')}</td>
             <td class="num">${v5esc(v5Money(v5Num(c.balance, 0)))}</td>
             <td class="num row-actions">
+                ${anchor}
                 <button type="button" class="icon" data-v5act="checkin-del" data-id="${v5esc(c.id)}"
-                    aria-label="Delete the check-in from ${v5esc(v5Long(c.date) || 'this date')}" title="Delete">✕</button>
+                    aria-label="Delete the check-in from ${v5esc(when || 'this date')}" title="Delete">✕</button>
             </td>
-        </tr>`).join('');
+        </tr>`;
+        }).join('');
     const more = checkins.length > 8 ? `<p class="v5-note">Showing the 8 most recent of ${checkins.length}.</p>` : '';
     return `<hr class="v5-sep"><div class="v5-label">Recent check-ins</div>
         <div class="table-wrap"><table>
             <thead><tr><th>Date</th><th>Account</th><th class="num">Balance</th><th class="num">Actions</th></tr></thead>
             <tbody>${rows}</tbody>
-        </table></div>${more}`;
+        </table></div>${more}
+        <p class="v5-note">Re-anchoring rewrites the account’s starting balance and as-of date to the reading you pick, so the forecast begins again from what you actually had.</p>`;
 }
 
 function v5AddCheckin(body) {
@@ -733,6 +1056,13 @@ function v5DeleteCheckin(id) {
 
 /* ───── FEAT-01-UI · Per-account balances ───── */
 
+// The engine states on each credit entry whether it applied the minimum payment
+// itself. A build that states nothing is read as applying nothing, so the panel
+// stays silent rather than claiming a payment that is not being made.
+function v5AutoMinApplied(entry) {
+    return !!(entry && entry.credit && entry.autoMinPayment);
+}
+
 function renderAccountsPanel(forecast) {
     const tracked = forecast && Array.isArray(forecast.accountsList) ? forecast.accountsList.length : 0;
     const shell = v5Shell('panelAccounts', 'Per-account balances',
@@ -763,9 +1093,16 @@ function renderAccountsPanel(forecast) {
                 ? '<span class="v5-chip pos">paying down</span>'
                 : move > 0.005 ? '<span class="v5-chip warn">growing</span>' : '')
             : (dips ? '<span class="v5-chip neg">goes negative</span>' : '');
-        const trailing = a.credit && a.apr ? `<span class="muted-text">${v5esc(v5Pct(a.apr))} APR</span>` : '';
+        const autoMin = v5AutoMinApplied(a);
+        const autoChip = autoMin ? '<span class="v5-chip info">minimum applied</span>' : '';
+        const paysOut = v5Num(a.autoMinPaymentOut, 0);
+        const bits = [];
+        if (a.credit && v5Num(a.apr, 0) > 0) bits.push(v5Pct(v5Num(a.apr, 0)) + ' APR');
+        if (a.credit && v5Num(a.minPayment, 0) > 0.005) bits.push('min ' + v5Money(v5Num(a.minPayment, 0)) + '/mo');
+        if (!a.credit && paysOut > 0.005) bits.push('pays ' + v5Money(paysOut) + ' of card minimums');
+        const trailing = bits.length ? `<span class="muted-text">${v5esc(bits.join(' · '))}</span>` : '';
         return `<tr>
-            <td>${v5esc(a.name || '(unnamed)')} ${flag}</td>
+            <td>${v5esc(a.name || '(unnamed)')} ${flag} ${autoChip}</td>
             <td><span class="tag">${v5esc(a.type || 'checking')}</span> ${trailing}</td>
             <td class="num">${v5esc(v5Money(start))}${a.credit ? ' <span class="muted-text">owed</span>' : ''}</td>
             <td class="num ${!a.credit && end < 0 ? 'v5-neg' : ''}">${v5esc(v5Money(end))}</td>
@@ -780,6 +1117,19 @@ function renderAccountsPanel(forecast) {
         ? `<p class="v5-note v5-neg">${v5esc(negatives.length + ' ' + v5Plural(negatives.length, 'account') + ' ' + (negatives.length === 1 ? 'dips' : 'dip') + ' below zero inside the horizon: ' + negatives.map(a => a.name).join(', ') + '.')}</p>`
         : '<p class="v5-note">No account dips below zero inside the horizon.</p>';
 
+    // A payment nobody entered has to be accounted for, or the balance falls for
+    // reasons the user cannot find anywhere in their own plan.
+    const auto = list.filter(a => v5AutoMinApplied(a));
+    const autoNote = auto.length
+        ? `<p class="v5-note">${v5esc(auto.map(a => {
+                const from = v5AccountName(a.autoMinPaymentFrom);
+                const total = v5Num(a.autoMinPaymentTotal, 0);
+                return `${a.name || '(unnamed)'} has a minimum payment of ${v5Money(v5Num(a.minPayment, 0))} on file and nothing in the plan paying it, ` +
+                    `so the forecast applies it every month — ${v5Money(total)} across the horizon` +
+                    (from ? `, drawn from ${from}` : '') + '.';
+            }).join(' ') + ' Enter a transfer that pays the card and the plan takes over instead.')}</p>`
+        : '';
+
     const asOf = v5Long(forecast.cutoffDate);
     v5Paint(shell, `${note}
         <div class="table-wrap"><table>
@@ -789,7 +1139,7 @@ function renderAccountsPanel(forecast) {
                 <th class="num">Lowest point</th><th class="num">Days in red</th>
             </tr></thead>
             <tbody>${rows}</tbody>
-        </table></div>
+        </table></div>${autoNote}
         <p class="v5-note">${v5esc('"Now" is each balance as stated at the newest as-of date on file' + (asOf ? ' (' + asOf + ')' : '') + '. Credit rows show the amount owed, so a falling number is the debt shrinking.')}</p>`);
 }
 
@@ -1145,11 +1495,24 @@ function renderGoalsPanel(forecast) {
         return;
     }
 
+    const horizonMonths = forecast && Array.isArray(forecast.monthList) ? forecast.monthList.length : 0;
+
     const cards = goals.map(cat => {
         const p = byId[cat.id] || {};
         const target = Math.max(0, v5Num(cat.target, 0));
-        const accumulated = v5Num(p.accumulated, 0);
-        const monthly = v5Num(p.monthly, 0);
+        // Money can reach a goal as a transfer rather than as spending filed
+        // against it, so the engine's contribution map is read where it exists
+        // and stands in for the progress figure where the progress is absent.
+        const contributed = v5Contribution(forecast, cat.id);
+        const stated = Object.prototype.hasOwnProperty.call(p, 'accumulated');
+        const accumulated = stated ? v5Num(p.accumulated, 0) : v5Num(contributed, 0);
+        const monthly = stated ? v5Num(p.monthly, 0)
+            : (horizonMonths > 0 ? accumulated / horizonMonths : 0);
+        const transferLine = (contributed == null || contributed <= 0.005) ? ''
+            : (contributed <= accumulated + 0.005
+                ? `Transfers into this category account for ${v5Money(contributed)} of that.`
+                : `Transfers into this category contribute ${v5Money(contributed)} across the horizon.`);
+        const requirement = v5GoalRequirement(p, cat, monthly);
         const pct = target > 0 ? Math.max(0, Math.min(100, (accumulated / target) * 100)) : null;
         const eta = p.eta ? v5Long(p.eta) : null;
         const targetDate = cat.targetDate ? v5Long(cat.targetDate) : null;
@@ -1177,6 +1540,8 @@ function renderGoalsPanel(forecast) {
             </div>
             ${bar}
             <p class="v5-note tight" style="margin-top:6px;">${v5esc(line)} · ${v5esc(rate)}</p>
+            ${transferLine ? `<p class="v5-note tight">${v5esc(transferLine)}</p>` : ''}
+            ${requirement ? `<p class="v5-note tight">${v5esc(requirement)}</p>` : ''}
             ${etaLine ? `<p class="v5-note tight">${v5esc(etaLine)}</p>` : ''}
             <div class="v5-row" style="margin-bottom:0;">
                 <div class="v5-field narrow">
@@ -1206,6 +1571,69 @@ function renderGoalsPanel(forecast) {
 function v5SafeColor(color) {
     if (typeof safeColor === 'function') return safeColor(color);
     return /^#[0-9a-f]{3,8}$/i.test(String(color || '').trim()) ? String(color).trim() : '#7dd3fc';
+}
+
+// Money can reach a goal as a transfer, which is not spending and so is kept out
+// of the spend map. The engine reports it separately, per month; a build that
+// reports nothing returns null here so the caller can tell "nothing contributed"
+// apart from "not reported".
+function v5Contribution(forecast, categoryId) {
+    if (!forecast || !categoryId) return null;
+    const map = forecast.monthlyContributionsByCategory || forecast.contributions;
+    if (!map) return null;
+    let value;
+    if (typeof map.get === 'function') value = map.get(categoryId);
+    else if (Object.prototype.hasOwnProperty.call(map, categoryId)) value = map[categoryId];
+    if (value == null) return null;
+    if (Array.isArray(value)) return v5Sum(value.map(n => v5Num(n, 0)));
+    const n = parseFloat(value);
+    return Number.isFinite(n) ? n : null;
+}
+
+// The figure a goal is really judged by: what has to go in each month between
+// now and the date for the target to arrive on time.
+function v5GoalRequirement(p, cat, monthly) {
+    const target = Math.max(0, v5Num(cat.target, 0));
+    const targetDate = v5ToDate(cat.targetDate);
+    if (target <= 0 || !targetDate) return '';
+
+    const stated = Object.prototype.hasOwnProperty.call(p, 'required');
+    const required = stated ? p.required : v5RequiredPerMonth(target, targetDate);
+    if (required == null || !Number.isFinite(required)) return v5GoalDateGone(target, targetDate);
+
+    const shortfall = (Object.prototype.hasOwnProperty.call(p, 'shortfall') && Number.isFinite(p.shortfall))
+        ? Math.max(0, p.shortfall)
+        : Math.max(0, required - monthly);
+    const left = Number.isFinite(p.monthsLeft) ? p.monthsLeft : v5MonthsLeft(targetDate);
+    const head = `Reaching ${v5Money(target)} by ${v5Long(targetDate)} needs ${v5Money(required)} a month` +
+        (left > 0 ? ` across the ${left} ${v5Plural(left, 'month')} before it` : ' from here') + '.';
+    if (shortfall <= 0.005) {
+        return `${head} The ${v5Money(monthly)} a month going in covers it.`;
+    }
+    return monthly > 0.005
+        ? `${head} That is ${v5Money(shortfall)} a month more than the ${v5Money(monthly)} going in now.`
+        : `${head} Nothing is going in at the moment, so the whole of it is outstanding.`;
+}
+
+// There is no rate to quote once the months have run out, and a date inside the
+// current month has run out too — this month is already part spent.
+function v5GoalDateGone(target, targetDate) {
+    const when = v5Long(targetDate);
+    return v5MonthsLeft(targetDate) < 0
+        ? `The target date, ${when}, has already passed — move it forward to see what reaching ${v5Money(target)} would take from here.`
+        : `The target date, ${when}, leaves no whole month to save in — move it forward to see what reaching ${v5Money(target)} would take.`;
+}
+
+// Whole months from this one to the target's, counted the way the engine counts
+// them: the current month is already part spent and does not qualify.
+function v5MonthsLeft(targetDate) {
+    const now = new Date();
+    return (targetDate.getFullYear() - now.getFullYear()) * 12 + (targetDate.getMonth() - now.getMonth());
+}
+
+function v5RequiredPerMonth(target, targetDate) {
+    const months = v5MonthsLeft(targetDate);
+    return months > 0 ? target / months : null;
 }
 
 function v5WireGoals(shell) {

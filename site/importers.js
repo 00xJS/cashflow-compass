@@ -990,6 +990,73 @@ function classifyRows(records, accountId) {
     return { fresh: fresh, skipped: skipped, possible: possible };
 }
 
+/* ───── Plan reconciliation ───── ----------------------------------------- */
+
+// A different question from the duplicate check above, and the two must not be
+// confused. That one asks "is this the same real-world transaction I already
+// hold?" and can drop a row. This one asks "which planned occurrence did this
+// real transaction settle?" and can only ever add a link: most spending was
+// never planned, so a row that matches nothing is an ordinary result and is
+// recorded exactly like any other.
+
+// The plan cannot change while the modal is open, and the summary re-matches
+// every time a checkbox is ticked, so the forecast is built once per wizard.
+function planForecast() {
+    if (wiz && wiz.forecastBuilt) return wiz.forecast;
+    let forecast = null;
+    if (typeof buildForecast === 'function') {
+        const st = appState();
+        let months = 12;
+        if (typeof resolveHorizon === 'function' && st && st.settings) {
+            try { months = resolveHorizon(st.settings.forecastHorizon); } catch (e) { months = 12; }
+        }
+        try { forecast = buildForecast(months); } catch (e) { forecast = null; }
+    }
+    if (wiz) { wiz.forecast = forecast; wiz.forecastBuilt = true; }
+    return forecast;
+}
+
+// rows are { id, date, amount }. Returns a Map of id -> planned transaction id,
+// or null if the engine could not be asked at all — the caller then records the
+// rows unlinked rather than refusing the import over it.
+function reconcileWithPlan(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    if (!list.length) return new Map();
+    if (typeof matchActuals !== 'function') return null;
+    const forecast = planForecast();
+    if (!forecast) return null;
+
+    const st = appState();
+    const existing = (st && Array.isArray(st.actuals)) ? st.actuals : [];
+    const mine = new Set();
+    list.forEach(function (r) { if (r && r.id != null) mine.add(r.id); });
+
+    let matches;
+    // Rows already on file are matched alongside the new ones and then dropped
+    // from the answer. They are not being rewritten, but a planned bill one of
+    // them already settled must not be settled a second time by this file.
+    try { matches = matchActuals(existing.concat(list), forecast); }
+    catch (e) { return null; }
+
+    const out = new Map();
+    (matches || []).forEach(function (m) {
+        if (m && m.txId && mine.has(m.actualId)) out.set(m.actualId, m.txId);
+    });
+    return out;
+}
+
+function reconcileChosen(chosen) {
+    return reconcileWithPlan((chosen || []).map(function (item) {
+        return { id: item.key, date: item.row.date, amount: item.row.amount };
+    }));
+}
+
+function matchPreview() {
+    const chosen = chosenRows();
+    const hits = reconcileChosen(chosen);
+    return { total: chosen.length, matched: hits ? hits.size : 0, available: !!hits };
+}
+
 /* ───── Injected styles ───── --------------------------------------------- */
 
 const STYLE_ID = 'importersStyles';
@@ -1170,6 +1237,8 @@ function startWizard(file, text) {
         result: null,
         rowChoices: [],
         dupChoices: [],
+        forecast: null,
+        forecastBuilt: false,
         catIndex: buildCategoryIndex()
     };
     // Only the text just read is held, and only for as long as the wizard is
@@ -1567,8 +1636,11 @@ function renderStepSummary() {
     const res = wiz.result;
     if (!res) return '<div class="imp-empty">Nothing to summarise.</div>';
 
+    const plan = matchPreview();
+
     let html = '<div class="imp-stats">';
     html += stat('New', res.fresh.length, res.fresh.length ? 'good' : '');
+    html += stat('Matched to plan', plan.available ? plan.matched : '—', plan.matched ? 'good' : '', 'impMatchStat');
     html += stat('Already imported', res.skipped.length, '');
     html += stat('Need a decision', res.possible.length, res.possible.length ? 'warn' : '');
     html += stat('Unreadable', res.failed.length, res.failed.length ? 'bad' : '');
@@ -1576,6 +1648,8 @@ function renderStepSummary() {
 
     html += '<p class="imp-note">Going into <strong>' + esc(accountName(wiz.accountId)) + '</strong>. ' +
         'Nothing has been written yet — that happens when you press the button below, and a backup is taken first.</p>';
+
+    html += '<p class="imp-note" id="impMatchNote">' + matchNoteHtml(plan) + '</p>';
 
     if (res.skipped.length) {
         html += '<div class="imp-flag ok"><strong>' + res.skipped.length + ' ' + plural(res.skipped.length, 'row', 'rows') +
@@ -1653,9 +1727,50 @@ function renderStepSummary() {
     return html;
 }
 
-function stat(label, value, tone) {
-    return '<div class="imp-stat' + (tone ? ' ' + tone : '') + '"><div class="k">' + esc(label) + '</div>' +
+function stat(label, value, tone, id) {
+    return '<div class="imp-stat' + (tone ? ' ' + tone : '') + '"' + (id ? ' id="' + esc(id) + '"' : '') + '>' +
+        '<div class="k">' + esc(label) + '</div>' +
         '<div class="v">' + esc(String(value)) + '</div></div>';
+}
+
+// Every figure below is a count this file produced, so there is nothing here to
+// escape — but keep it that way if the wording ever grows a payee in it.
+function matchNoteHtml(plan) {
+    const n = plan.total;
+    if (!n) return 'Nothing is ticked, so there is nothing to check against your plan.';
+    if (!plan.available) {
+        return 'Your plan could not be checked from here, so none of these will be linked to a planned item. ' +
+            'The transactions themselves are recorded exactly as shown.';
+    }
+    const matched = plan.matched;
+    const rest = n - matched;
+    if (!matched) {
+        return 'None of the ' + n + ' ticked ' + plural(n, 'row', 'rows') + ' lines up with something you planned, so ' +
+            plural(n, 'it goes', 'they go') + ' in as unplanned spending. That is normal for anything you never budgeted for.';
+    }
+    if (!rest) {
+        return '<strong>All ' + n + '</strong> ticked ' + plural(n, 'row', 'rows') + ' ' + plural(n, 'settles', 'settle') +
+            ' something you planned, so variance can put the two side by side.';
+    }
+    return '<strong>' + matched + ' of ' + n + '</strong> ticked ' + plural(n, 'row', 'rows') + ' ' +
+        plural(matched, 'settles', 'settle') + ' something you planned; the other ' + rest + ' ' +
+        plural(rest, 'goes', 'go') + ' in as unplanned spending, which is normal.';
+}
+
+// Ticking a single row redraws these two in place for the same reason the
+// commit button is patched rather than re-rendered — a full redraw mid-list
+// would steal the focus back to the top.
+function updateMatchSummary() {
+    if (!modalEl) return;
+    const plan = matchPreview();
+    const note = modalEl.querySelector('#impMatchNote');
+    if (note) note.innerHTML = matchNoteHtml(plan);
+    const tile = modalEl.querySelector('#impMatchStat');
+    if (tile) {
+        const value = tile.querySelector('.v');
+        if (value) value.textContent = plan.available ? String(plan.matched) : '—';
+        tile.classList.toggle('good', !!plan.matched);
+    }
 }
 
 function categoryOptions(selected) {
@@ -1950,6 +2065,23 @@ function countChosen() {
     return n;
 }
 
+// The rows currently ticked, each carrying a key that survives a re-render.
+// Matching breaks a tie on the row identifier, so a key that changed between
+// the preview and the commit could break the same tie the other way and write
+// a different answer from the one the user agreed to.
+function chosenRows() {
+    const out = [];
+    if (!wiz || !wiz.result) return out;
+    wiz.result.fresh.forEach(function (r, i) {
+        const c = wiz.rowChoices[i];
+        if (c && c.keep) out.push({ key: 'f' + i, row: r, categoryId: c.categoryId || null });
+    });
+    wiz.result.possible.forEach(function (p, i) {
+        if (wiz.dupChoices[i]) out.push({ key: 'p' + i, row: p.row, categoryId: null });
+    });
+    return out;
+}
+
 /* ───── Commit ───── ------------------------------------------------------ */
 
 function commitImport() {
@@ -1957,21 +2089,23 @@ function commitImport() {
     if (!st || !wiz || !wiz.result) return;
     if (!Array.isArray(st.actuals)) st.actuals = [];
 
-    const chosen = [];
-    wiz.result.fresh.forEach(function (r, i) {
-        const c = wiz.rowChoices[i];
-        if (c && c.keep) chosen.push({ row: r, categoryId: c.categoryId || null });
-    });
-    wiz.result.possible.forEach(function (p, i) {
-        if (wiz.dupChoices[i]) chosen.push({ row: p.row, categoryId: null });
-    });
+    const chosen = chosenRows();
     if (!chosen.length) return;
+
+    // Worked out before anything is written, and from the same rows and the same
+    // forecast the summary just quoted, so the number on screen is the number
+    // that lands. A null map means the plan could not be consulted; the rows are
+    // still recorded, just without a link.
+    const planned = reconcileChosen(chosen) || new Map();
 
     if (typeof writeBackup === 'function') writeBackup('the bank file import');
 
     const accountId = wiz.accountId;
+    let matched = 0;
     chosen.forEach(function (item) {
         const r = item.row;
+        const txId = planned.get(item.key) || null;
+        if (txId) matched++;
         st.actuals.push({
             id: newId('act'),
             date: r.date,
@@ -1980,7 +2114,7 @@ function commitImport() {
             accountId: accountId,
             categoryId: item.categoryId || null,
             importedId: r.importedId,
-            matchedTxId: null,
+            matchedTxId: txId,
             source: r.source
         });
     });
@@ -1996,6 +2130,7 @@ function commitImport() {
     if (typeof renderAll === 'function') renderAll();
 
     flash(added + ' ' + plural(added, 'transaction', 'transactions') + ' recorded against ' + accountName(accountId) +
+        (matched ? ', ' + matched + ' matched to your plan' : '') +
         (skipped ? ' — ' + skipped + ' already there ' + plural(skipped, 'was', 'were') + ' left alone.' : '.'), 'info');
 }
 
@@ -2077,6 +2212,7 @@ function wireModal() {
             const i = +node.getAttribute('data-i');
             if (wiz.rowChoices[i]) wiz.rowChoices[i].keep = !!node.checked;
             updateCommitButton();
+            updateMatchSummary();
             return;
         }
         if (act === 'cat') {
@@ -2088,6 +2224,7 @@ function wireModal() {
             const i = +node.getAttribute('data-i');
             wiz.dupChoices[i] = !!node.checked;
             updateCommitButton();
+            updateMatchSummary();
             return;
         }
     });
@@ -2169,6 +2306,7 @@ window.Importers = {
     stableHash: stableHash,
     fallbackImportedId: fallbackImportedId,
     classifyRows: classifyRows,
+    reconcileWithPlan: reconcileWithPlan,
     suggestCategory: suggestCategory,
     buildCategoryIndex: buildCategoryIndex,
     open: openImportWizard

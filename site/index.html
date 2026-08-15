@@ -10,6 +10,15 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧭</text></svg>">
 <title>Cashflow Compass</title>
+<!-- Both libraries are vendored and checked in; nothing here is ever fetched from a CDN.
+     Subresource Integrity is deliberately omitted. A file:// response is not eligible for
+     an integrity check, so SRI fails closed there: measured in Chrome, adding correct
+     sha384 hashes to these two tags leaves window.Chart and window.XLSX undefined when
+     index.html is opened straight off disk, killing the charts and the Excel export.
+     Supporting that offline path outranks the residual benefit, since the tampered-artifact
+     threat SRI would catch is already narrowed by script-src 'self' over these local copies.
+     Should a hosted-only build ever add integrity="sha384-…", both hashes must be
+     regenerated every time a vendored library is updated, or the app will not boot. -->
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/xlsx.full.min.js"></script>
 <style>
@@ -272,6 +281,12 @@ button.danger { background: var(--down); color: var(--btn-ink); border-color: va
 button.danger:hover { filter: brightness(1.08); }
 button.ghost { background: transparent; }
 button.icon { padding: 6px 9px; font-size: 13px; }
+/* The collapse chevron sits in its own span so scripts can swap the glyph without
+   overwriting the button's contents, which would take the accessible name with it. */
+.toggle-glyph {
+    display: inline-block;
+    line-height: 1;
+}
 
 /* ── Section cards (deck panels) ── */
 section.card {
@@ -375,6 +390,14 @@ input:focus, select:focus, textarea:focus {
     color: var(--down);
 }
 .field-error:empty { display: none; }
+/* Standing guidance under an input — always present, unlike .field-error. */
+.field-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    line-height: 1.35;
+    color: var(--faint);
+}
 input[aria-invalid="true"],
 select[aria-invalid="true"] {
     border-color: var(--down);
@@ -965,6 +988,19 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
             <label for="acctAsOf">As of Date</label>
             <input type="date" id="acctAsOf" required>
         </div>
+        <!-- Only meaningful for credit accounts, so app.js hides these two wrappers for
+             every other type. Left visible in the markup: if the wiring is ever removed
+             the fields stay reachable rather than silently stranding saved values. -->
+        <div id="acctAprField">
+            <label for="acctApr">APR %</label>
+            <input type="number" id="acctApr" min="0" step="0.01" placeholder="e.g., 19.99" aria-describedby="acctAprHint">
+            <span class="field-hint" id="acctAprHint">Credit accounts only — the annual interest rate charged on the balance.</span>
+        </div>
+        <div id="acctMinPaymentField">
+            <label for="acctMinPayment">Minimum Payment</label>
+            <input type="number" id="acctMinPayment" min="0" step="0.01" placeholder="e.g., 35.00" aria-describedby="acctMinPaymentHint">
+            <span class="field-hint" id="acctMinPaymentHint">Credit accounts only — the smallest amount due each month.</span>
+        </div>
         <div class="full form-actions">
             <span class="muted-text" id="acctEditingHint"></span>
             <span class="spacer"></span>
@@ -991,7 +1027,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-categories">
     <h2>
         Categories
-        <button class="ghost icon" type="button" id="catToggle" aria-expanded="true" aria-controls="catBody"><span class="visually-hidden">Toggle categories section</span>▾</button>
+        <button class="ghost icon" type="button" id="catToggle" aria-label="Toggle categories section" aria-expanded="true" aria-controls="catBody"><span class="visually-hidden">Toggle categories section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
     </h2>
     <div id="catBody">
         <form id="categoryForm" class="form-grid">
@@ -1034,7 +1070,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-transactions">
     <h2>
         <span>Transactions <span class="section-meta" id="txMeta"></span></span>
-        <button class="ghost icon" type="button" id="txToggle" aria-expanded="true" aria-controls="txBody"><span class="visually-hidden">Toggle transactions section</span>▾</button>
+        <button class="ghost icon" type="button" id="txToggle" aria-label="Toggle transactions section" aria-expanded="true" aria-controls="txBody"><span class="visually-hidden">Toggle transactions section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
     </h2>
     <div id="txBody">
     <form id="txForm" class="form-grid">
@@ -1163,7 +1199,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-forecast">
     <h2>
         <span><span id="forecastTitle">12-Month Forecast</span> <span class="section-meta" id="forecastMeta"></span></span>
-        <button class="ghost icon" type="button" id="forecastToggle" aria-expanded="true" aria-controls="forecastBody"><span class="visually-hidden">Toggle forecast section</span>▾</button>
+        <button class="ghost icon" type="button" id="forecastToggle" aria-label="Toggle forecast section" aria-expanded="true" aria-controls="forecastBody"><span class="visually-hidden">Toggle forecast section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
     </h2>
     <div id="forecastBody">
         <div class="forecast-wrap">
@@ -1179,7 +1215,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-balances">
     <h2>
         <span>Balances by Account</span>
-        <button class="ghost icon" type="button" id="balancesToggle" aria-label="Toggle balances by account section" aria-expanded="true" aria-controls="balancesBody"><span class="visually-hidden">Toggle balances by account section</span>▾</button>
+        <button class="ghost icon" type="button" id="balancesToggle" aria-label="Toggle balances by account section" aria-expanded="true" aria-controls="balancesBody"><span class="visually-hidden">Toggle balances by account section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
     </h2>
     <div class="panel-body" id="balancesBody">
         <p class="panel-note">Where your money actually sits — the projected end-of-month balance for each account, instead of one combined total.</p>
@@ -1191,7 +1227,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-calendar">
     <h2>
         <span>Bills Calendar</span>
-        <button class="ghost icon" type="button" id="calendarToggle" aria-label="Toggle bills calendar section" aria-expanded="true" aria-controls="calendarBody"><span class="visually-hidden">Toggle bills calendar section</span>▾</button>
+        <button class="ghost icon" type="button" id="calendarToggle" aria-label="Toggle bills calendar section" aria-expanded="true" aria-controls="calendarBody"><span class="visually-hidden">Toggle bills calendar section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
     </h2>
     <div class="panel-body" id="calendarBody">
         <p class="panel-note">A day-by-day view of what lands when, so you can spot the crowded weeks before they arrive.</p>
@@ -1203,7 +1239,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-charts">
     <h2>
         <span>Visualizations</span>
-        <button class="ghost icon" type="button" id="chartsToggle" aria-expanded="true" aria-controls="chartsGrid"><span class="visually-hidden">Toggle visualizations section</span>▾</button>
+        <button class="ghost icon" type="button" id="chartsToggle" aria-label="Toggle visualizations section" aria-expanded="true" aria-controls="chartsGrid"><span class="visually-hidden">Toggle visualizations section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
     </h2>
     <div class="charts-grid" id="chartsGrid">
         <div class="chart-card" data-chart-card="monthly">
@@ -1267,7 +1303,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-checkin">
     <h2>
         <span>Monthly Check-in</span>
-        <button class="ghost icon" type="button" id="checkinToggle" aria-label="Toggle monthly check-in section" aria-expanded="true" aria-controls="checkinBody"><span class="visually-hidden">Toggle monthly check-in section</span>▾</button>
+        <button class="ghost icon" type="button" id="checkinToggle" aria-label="Toggle monthly check-in section" aria-expanded="true" aria-controls="checkinBody"><span class="visually-hidden">Toggle monthly check-in section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
     </h2>
     <div class="panel-body" id="checkinBody">
         <p class="panel-note">Record what an account really held at the end of a month, so the forecast keeps starting from a true balance.</p>
@@ -1279,7 +1315,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-variance">
     <h2>
         <span>Plan vs Actual</span>
-        <button class="ghost icon" type="button" id="varianceToggle" aria-label="Toggle plan versus actual section" aria-expanded="true" aria-controls="varianceBody"><span class="visually-hidden">Toggle plan versus actual section</span>▾</button>
+        <button class="ghost icon" type="button" id="varianceToggle" aria-label="Toggle plan versus actual section" aria-expanded="true" aria-controls="varianceBody"><span class="visually-hidden">Toggle plan versus actual section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
     </h2>
     <div class="panel-body" id="varianceBody">
         <p class="panel-note">Sets what you planned to spend against what you checked in, so you can see where the forecast drifts.</p>
@@ -1291,7 +1327,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-debt">
     <h2>
         <span>Debt Payoff</span>
-        <button class="ghost icon" type="button" id="debtToggle" aria-label="Toggle debt payoff section" aria-expanded="true" aria-controls="debtBody"><span class="visually-hidden">Toggle debt payoff section</span>▾</button>
+        <button class="ghost icon" type="button" id="debtToggle" aria-label="Toggle debt payoff section" aria-expanded="true" aria-controls="debtBody"><span class="visually-hidden">Toggle debt payoff section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
     </h2>
     <div class="panel-body" id="debtBody">
         <p class="panel-note">How long each balance takes to clear at the payment you are making now, and what the interest costs along the way.</p>
@@ -1303,7 +1339,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-goals">
     <h2>
         <span>Savings Goals</span>
-        <button class="ghost icon" type="button" id="goalsToggle" aria-label="Toggle savings goals section" aria-expanded="true" aria-controls="goalsBody"><span class="visually-hidden">Toggle savings goals section</span>▾</button>
+        <button class="ghost icon" type="button" id="goalsToggle" aria-label="Toggle savings goals section" aria-expanded="true" aria-controls="goalsBody"><span class="visually-hidden">Toggle savings goals section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
     </h2>
     <div class="panel-body" id="goalsBody">
         <p class="panel-note">Set an amount you are saving towards and see the date you reach it at your current pace.</p>
@@ -1315,7 +1351,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-scenarios">
     <h2>
         <span>Scenarios</span>
-        <button class="ghost icon" type="button" id="scenariosToggle" aria-label="Toggle scenarios section" aria-expanded="true" aria-controls="scenariosBody"><span class="visually-hidden">Toggle scenarios section</span>▾</button>
+        <button class="ghost icon" type="button" id="scenariosToggle" aria-label="Toggle scenarios section" aria-expanded="true" aria-controls="scenariosBody"><span class="visually-hidden">Toggle scenarios section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
     </h2>
     <div class="panel-body" id="scenariosBody">
         <p class="panel-note">Try a what-if — a raise, a rent rise, one bill gone — and compare it against your real numbers without changing them.</p>
@@ -1327,7 +1363,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <section class="card" id="section-portability">
     <h2>
         <span>Backup &amp; Portability</span>
-        <button class="ghost icon" type="button" id="portabilityToggle" aria-label="Toggle backup and portability section" aria-expanded="true" aria-controls="portabilityBody"><span class="visually-hidden">Toggle backup and portability section</span>▾</button>
+        <button class="ghost icon" type="button" id="portabilityToggle" aria-label="Toggle backup and portability section" aria-expanded="true" aria-controls="portabilityBody"><span class="visually-hidden">Toggle backup and portability section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
     </h2>
     <div class="panel-body" id="portabilityBody">
         <p class="panel-note">Save a full copy of your data, bring one back, or carry it to another browser or device. Nothing leaves your machine.</p>

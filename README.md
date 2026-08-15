@@ -4,7 +4,7 @@
 
 **[Live demo →](https://cashflow-comp.netlify.app/)**
 
-A personal budgeting and forecasting app that runs entirely in your browser. Plan up to 36 months ahead, model income at any cadence (including bi-weekly), see where every dollar goes, and round-trip your full state through an Excel workbook so the spreadsheet itself is a portable backup.
+A personal budgeting and forecasting app that runs entirely in your browser. Plan up to 36 months ahead, model income at any cadence (including bi-weekly), see where every dollar goes, and round-trip your plan through an Excel workbook so the spreadsheet itself is a portable backup.
 
 It is a **forecasting** app first: you describe the money you expect to move, and it projects that forward. It can also check that forecast against reality — record what an account actually holds today, or open a transaction file you downloaded from your own bank yourself — and tell you where the plan and the world have drifted apart. That is the whole of its contact with the outside world: **it never links to a financial account, and it never will.**
 
@@ -14,9 +14,7 @@ No build step, no backend, no account sign-up, no network requests — open `sit
 
 A **[Getting Started guide](site/guide.html)** is built into the app (linked in the header) and covers every feature in depth — accounts and transfers, the credit-card model, categories, frequencies, the forecast grid, charts, insights, check-ins, importing your bank's file, plan-vs-actual, the debt planner, goals, the bills calendar, scenarios, backups and encryption, and pro tips.
 
-<!-- Screenshot placeholder — no image file is committed yet. -->
-> **📸 Screenshot wanted.** Save a capture of the forecast grid with the charts below it to `docs/screenshot.png`, then replace this block with:
-> `![Cashflow Compass — forecast grid and charts](docs/screenshot.png)`
+![Six charts — income against expenses, projected running balance, spend and income by category, a stacked category trend and the ten largest costs — above a panel of auto-generated insight cards reading 49.6% savings rate, housing as the biggest category, 67.4% of spend in the top three, 7.6 months of emergency fund, zero days in the red and $40,291 projected cash](docs/screenshot.png)
 
 ---
 
@@ -41,8 +39,9 @@ Then, once the plan is roughly right and you want to know how honest it is:
 - Multiple accounts with type (checking / savings / credit card / investment / cash)
 - Starting balance + as-of date; the forecast anchors to the latest as-of date and counts forward from there
 - **Per-account projected balances** — every transaction is assigned to an account, and the forecast tracks each account's balance month by month as well as the combined totals, so you can see checking run thin while savings climbs
-- **Transfers actually move money** — pick a from-account and a to-account; net cash flow is unchanged, but the two balances move
-- Credit cards are liabilities: subtracted from net worth, excluded from liquid cash, and they **accrue interest** at the APR you set instead of sitting frozen. Record the card's minimum payment alongside it
+- **Transfers actually move money** — pick a from-account and a to-account; the two balances move while net cash flow is unchanged, which is also why a transfer never takes a row in the forecast grid. Watch it in Balances by Account instead
+- Credit cards are liabilities: subtracted from net worth, excluded from liquid cash, and they **accrue interest** at the APR you set instead of sitting frozen. **APR %** and **Minimum Payment** are fields on the account form; both are read only for credit accounts and ignored on every other type
+- **A minimum payment on file gets paid.** If nothing in your plan transfers money to that card, the forecast pays the minimum each month out of your largest liquid account rather than letting the balance compound forever while the payoff planner insists it clears. A payment you modelled yourself always wins — the assumed one is never added on top of it — and the Balances by Account panel marks any card whose payment was assumed rather than entered
 - Net worth and **liquid cash** are tracked separately — the red-balance warnings watch liquid cash, so a brokerage balance can't mask an overdrawn checking account
 - **Balance check-ins** measure an account's projection against what it really holds — see [Balance check-ins](#balance-check-ins)
 
@@ -67,14 +66,15 @@ Two things to read off that table:
 That is why a card payment is a transfer and not an expense. If you record the groceries *and* log the $500 payment as an expense, you have charged yourself for the same groceries twice and your forecast is wrong by $500 a month.
 
 **Pick one lane per card:**
-- *Detailed* — record purchases against the card and pay it down with transfers. The card balance and interest are modelled properly. Best if you carry a balance.
-- *Simple* — don't record card purchases at all; model just the monthly payment as an expense in a Debt category. Fast, but the card balance never moves and interest is not modelled. Fine if you clear the card every month.
+- *Detailed* — record purchases against the card and pay it down with transfers. The card balance and interest are modelled properly, and if you never model a payment the minimum on file is applied for you. Best if you carry a balance.
+- *Simple* — don't record card purchases at all; model just the monthly payment as an expense in a Debt category. Fast, but nothing tracks what the card actually owes. **Leave that card's Minimum Payment blank in this lane** — an expense in a Debt category isn't attached to the card, so a minimum left on file would be paid a second time on top of the one you modelled. Fine if you clear the card every month.
 
 ### Categories
 - 19 sensible defaults, grouped by **kind**: Income · Fixed · Variable · Discretionary · Savings · Debt · Tax · Goal
 - Includes Home Internet, Electric, Phone Bill out of the box, and a **Savings Goal** category for the Goal kind
 - Add / edit / delete your own; pick any color. Deleting a category that's in use asks where to move its transactions and reassigns them as part of the delete
-- **Goal** categories take an optional target amount and target date, which is what turns them into tracked goals — see [Goals and sinking funds](#goals-and-sinking-funds)
+- **Move a category's transactions without deleting it** — the ⇄ button on any category that's in use re-files everything under it somewhere else and leaves the category itself standing
+- **Goal** categories are made in the Savings Goals panel rather than from this form, which is also where a goal's target amount and optional target date live. Once created they behave like any other category here — see [Goals and sinking funds](#goals-and-sinking-funds)
 - Click **Name** or **Kind** column headers to sort A→Z (click again for Z→A)
 
 ### Transactions
@@ -98,6 +98,7 @@ That is why a card payment is a transfer and not an expense. If you record the g
 ### Forecast grid
 - Rows grouped by category kind (Income → Fixed → Variable → Discretionary → Savings → Debt → Tax → Goal), with an Other group catching rows whose category has gone missing; empty groups are skipped
 - **Fixed** group auto-organizes itself into three frequency buckets — weekly / bi-weekly / semi-monthly / monthly / quarterly first, then semi-annual and annual, then one-time and custom — and sorts each bucket by the raw amount on the transaction (not the annual total, not escalation-adjusted), largest first. So a $900 monthly rent leads the group, and a $1,200 annual insurance premium sorts below a $12 monthly subscription because they're in different buckets — periodic bills stay together instead of being scattered by size.
+- **Transfers take no row here.** Money moved between your own accounts is neither income nor spending, so every month's figure on such a row is zero by construction and the row is dropped rather than padded out with zeroes. The money still moves — see it in Balances by Account, and in goal progress when the transfer is filed under a Goal category
 - Per-month columns plus a Total column on the right
 - Summary rows at the bottom: Total Income, Total Expenses, Net Cash Flow, **End-of-Month Cash** (spendable), and **Net Worth** — net worth can climb while cash falls, which is why both are shown
 - Negative cash flagged in red so crunches jump out
@@ -106,7 +107,7 @@ That is why a card payment is a transfer and not an expense. If you record the g
 | Chart | What it shows |
 |---|---|
 | **Monthly Income vs Expenses** | Side-by-side bars per month with a Net cash-flow line overlay |
-| **Running Balance** | Projected balance month-by-month, area-filled — with [confidence bands](#confidence-bands) once you've imported enough real history |
+| **Running Balance** | Projected balance month-by-month — one area-filled line on its own, with a dashed [confidence corridor](#confidence-bands) around it once a category has three full months of imported actuals |
 | **Spend by Category** | Doughnut breakdown of where expenses go |
 | **Category Trend (stacked)** | How each category's spend evolves over time |
 | **Top 10 Costs** | The 10 individual expense lines that cost the most over the chosen horizon (window totals, not annualized — the ranking shifts when you change the horizon) |
@@ -118,8 +119,9 @@ Every chart has its own horizon dropdown — you can keep most charts on the glo
 
 **Cards appear only where your data supports them**, and an empty budget produces **no cards at all**. Most are conditional — no income stream means no savings rate, no subscriptions means no subscription card — while a few always report once you have data, stating the all-clear ("0 days", "None forecast") when there's nothing to flag.
 
-- **Savings Rate** — what % of income you actually keep; money moved to savings, a goal, or debt principal counts as kept, not spent
+- **Savings Rate** — what % of income you actually keep; spending you file under a Savings, Goal or Debt category counts as kept, not spent
 - **Biggest Category** — single largest expense category as a % of total spend
+- **Spend Concentration** — the share of all spending carried by your top three categories, once there are at least four to compare. One big category says little; whether three of them carry most of the outflow says whether the plan turns on a few large levers or is spread thin
 - **Fixed vs Variable** — share of everyday spending that's committed (Fixed) versus flexible (Variable + Discretionary)
 - **Annual Subscription Cost** — annualized subscription burn, matched by the Subscriptions category, any Fixed category named after subscriptions, or a `subscription` tag
 - **Emergency Fund** — liquid cash against four tiers ($1,000 starter buffer → 6 weeks of take-home → 3 months of expenses → 6 months), showing the tier you're past and the gap to the next
@@ -139,7 +141,8 @@ The app then shows you the **drift** — what the forecast said that account wou
 
 - Only the **latest** check-in per account feeds the drift; older ones are kept as history. Averaging them would blunt the signal
 - The combined total is read in **net-worth terms**, so a card balance counts against the pile rather than cancelling out a current account
-- A check-in measures the gap, it doesn't rewrite your accounts. To **re-anchor**, set the account's starting balance to what you observed and its as-of date to the day you observed it — everything from there forward is then projected from a number you have actually seen
+- **Forecast vs reality over time** — from the second reading on an account, the history is plotted as what the forecast said against what you had, so you can see whether the drift is widening or closing
+- A check-in measures the gap; it doesn't rewrite your accounts on its own. **Re-anchor** does, in one click: the account's starting balance becomes the figure you recorded and its as-of date becomes the day you recorded it, after a confirmation that spells out both numbers. Everything from there forward is then projected from something you have actually seen
 
 ### Importing actuals from a file you downloaded yourself
 
@@ -152,7 +155,7 @@ Banks let you download your own transactions. The app reads that file.
 - **Duplicate detection, in three piles** — *new*, *already imported* (skipped), and *possible duplicates* (same amount within three days, presented as tickboxes for you to decide). Rows carrying an `FITID` (OFX/QFX/QIF) are keyed on it; rows without one get a stable content hash of date, amount and payee
 - **Categories suggested, never invented** — a new row is filed by matching payees you've categorised before; anything unrecognised is left uncategorised rather than guessed at. A currency mismatch is reported, and amounts are imported exactly as written with no conversion
 - **Matching** — imported rows are matched against planned transactions within a date window, so "the rent I planned for the 1st" and "the rent that cleared on the 3rd" are understood to be the same event
-- Every imported row is **editable and deletable** afterwards, and can be re-categorised by hand
+- **The last step is the one that matters** — the review is where you set each row's category (one at a time, or all of them at once) and untick anything you'd rather not record. The app has no per-row editor for recorded rows afterwards; to fix or drop one later, edit the `Actuals` sheet of an Excel export and import it back
 
 **This is not a bank connection, and it is not a step toward one.**
 
@@ -175,13 +178,15 @@ The framing here is deliberate. Being over on groceries three months running isn
 
 ### Confidence bands
 
-The Running Balance chart can draw a band around the projected line — a plausible range rather than a single confident number.
+The Running Balance chart can draw a corridor around the projected line — a plausible range rather than a single confident number.
 
-**It will refuse to draw one until it has evidence.** A category needs at least **three observed months** of imported actuals before it contributes to the band, and with nothing imported there is no band at all. This is on purpose: the plan is deterministic arithmetic, so any spread invented from it would be a decoration that *looks* like statistics. Fake error bars are worse than none — they make a guess look measured. Import a few months of history and the bands appear, derived from how much your real spending in each category actually varies (25th / 50th / 75th percentile of monthly totals).
+**It will refuse to draw one until it has evidence.** A category needs at least **three complete months** of imported actuals before it contributes anything, and the month in progress never counts, because a month still running holds only part of its spending. Until something qualifies you get the single projected line and a note saying what would make a range appear — no band, not even a narrow one. This is on purpose: the plan is deterministic arithmetic, so any spread invented from it would be a decoration that *looks* like statistics. Fake error bars are worse than none — they make a guess look measured.
+
+Once a category does qualify, its own recorded monthly totals (25th / 50th / 75th percentile) stand in for its planned figure, and the two dashed edges are where the balance lands if every qualifying category spends at its quarter and three-quarter marks. Categories with thin history stay on the plan, so the corridor opens only where reality has actually been measured.
 
 ### Debt payoff planner
 
-Enter each card's balance, APR and minimum payment, then add an **extra monthly payment** if you have one, and the planner runs both standard strategies side by side:
+Give each credit-card account its balance, APR and minimum payment on the account form, add an **extra monthly payment** in the panel if you have one, and the planner runs both standard strategies side by side:
 
 - **Avalanche** — highest APR first. Mathematically the cheapest
 - **Snowball** — smallest balance first. Clears individual cards sooner, which some people find easier to stick to
@@ -192,9 +197,11 @@ That's arithmetic, not advice. The app has no opinion about which you should cho
 
 ### Goals and sinking funds
 
-Create a category with the **Goal** kind, give it a target amount and (optionally) a target date, and fund it with ordinary transactions — a $250 monthly transfer into savings, say.
+Name a goal in the **Savings Goals** panel and give it a target amount and (optionally) a target date — that creates a Goal-kind category, and a **Savings Goal** one ships by default. Fund it with ordinary transactions filed under that category — a $250 monthly transfer from checking into savings, say. An expense-kind line filed under the goal counts too, if that suits how you think about it; a transaction is one or the other, so nothing is ever counted twice.
 
-The app then tracks the goal: how much your plan accumulates toward it over the horizon, the monthly run-rate, the percentage of target reached, and an **ETA** — the month the target is met, projected past the end of the horizon if it takes that long. With a target date set, the goal is marked on track or not. Sinking funds (the annual insurance premium you save toward monthly) work exactly the same way.
+The app then tracks the goal: how much your plan puts toward it over the horizon, the monthly run-rate, the percentage of target reached, and an **ETA** — the month the target is met, projected past the end of the horizon if it takes that long. With a target date set, the goal is marked on track or behind, and the panel states what reaching the target by that date needs per month and how far the current rate falls short. Sinking funds (the annual insurance premium you save toward monthly) work exactly the same way.
+
+**A transfer funds the goal without ever appearing in the forecast grid.** Moving $250 from checking to savings is not spending, so the row's monthly figures are zero and the grid drops it — see [Forecast grid](#forecast-grid). The goal's progress, run-rate and ETA all count that money anyway, the goals panel says how much of the total arrived as transfers, and Balances by Account shows savings climbing while checking doesn't. It stays out of the spend doughnut, the Biggest Category card and the savings rate, none of which a transfer belongs in.
 
 ### Bills calendar
 
@@ -204,31 +211,36 @@ Monthly totals hide the shape of a month completely. A month can finish comforta
 
 ### Scenarios
 
-A scenario is a named set of changes layered on top of your base plan: **add** a transaction, **remove** one, or **modify** one (amount, start date, end date, paused, escalation).
+A scenario is a named set of changes layered on top of your base plan: **add** a transaction (income or expense), **remove** one, or **modify** one (amount, start date, end date, paused, escalation).
 
 - "New job" — raise the salary line, add a commuting cost
 - "Baby" — add childcare, pause the travel fund
 - "Move" — remove the current rent, add a bigger one starting in June
 
-Switch between a scenario and the base plan and the entire app — grid, charts, insights — recalculates. A **side-by-side comparison** puts the scenario against the base plan so you can see the difference in closing cash, net worth and monthly net, rather than trying to remember what the numbers were a moment ago. Your base plan is never touched; a scenario is a lens, not an edit.
+Switch between a scenario and the base plan and the entire app — grid, charts, insights — recalculates. A **side-by-side comparison** lists the base plan and each scenario as rows of one table — end balance, lowest point and the date it happens, days in the red, savings rate — rather than leaving you to remember what the numbers were a moment ago. Every row is the whole forecast rebuilt with that scenario applied; the first eight scenarios are compared. Your base plan is never touched; a scenario is a lens, not an edit.
 
 ### Excel export / import
-Five sheets:
+Eight sheets:
 
 | Sheet | Purpose |
 |---|---|
 | `Accounts` | id, name, type, startingBalance, asOfDate, apr, minPayment |
-| `Categories` | id, name, kind, color (plus target and target date on Goal categories) |
+| `Categories` | id, name, kind, color — a Goal category's target and target date are not among the columns |
 | `Transactions` | id, name, kind, amount, categoryId, accountId, fromAccountId, frequency, customN, customUnit, startDate, endDate, escalation, tags (semicolon-separated), notes, paused |
-| `Settings` | schemaVersion, currency, forecastHorizon, plus one `chartHorizon.<chart>` row per per-chart override — so a re-import restores the view you left, not just the numbers |
-| `Forecast` | Rendered projection, export-only (written on export, ignored on import): one row per transaction — name, its **category**, a column per month, and a total — followed by the income, expense, net cash flow and closing balance summary rows |
+| `Actuals` | The rows you imported from your bank's file: id, date, amount (signed), payee, accountId, categoryId, importedId, matchedTxId, source |
+| `Checkins` | id, date, accountId, balance — the balances you recorded by hand |
+| `Scenarios` | One row per change: scenarioId, scenarioName, op, txId, a column for each field a scenario is allowed to patch (amount, startDate, endDate, paused, escalation), and `tx` — an added transaction, carried whole as JSON. A scenario with no changes still gets a row, or its name wouldn't survive the trip |
+| `Settings` | schemaVersion, currency, forecastHorizon, activeScenarioId, plus one `chartHorizon.<chart>` row per per-chart override — so a re-import restores the view you left, not just the numbers |
+| `Forecast` | Rendered projection, export-only (written on export, ignored on import): a row for every transaction — item name, the category it is filed under, a column per month, and a total — then the Total Income, Total Expenses, Net Cash Flow, End-of-Month Cash and Net Worth summary rows. Unlike the on-screen grid this keeps transfer rows, at their true all-zero monthly figures |
 
 **Re-import semantics: replace all.** The workbook is the source of truth. Importing a file wipes whatever is in your browser and reloads from the spreadsheet. A confirmation dialog warns you first and the result offers **Undo**. Nothing in a file is trusted: every field is type-checked and every reference validated, and anything skipped or repaired is reported back as import notes. Edit amounts in Excel, re-import, and the new numbers ripple through the forecast and charts.
 
 A file written by a *newer* version of the app is refused outright rather than imported with the unknown fields silently dropped — the error tells you which format version the file is and which one this copy understands.
 
+> **Two things do not survive a round trip.** A Goal category's target amount and target date are dropped on import — by either format — so a goal comes back tracking contributions with no target to measure them against. So is the remembered CSV column mapping for an account, which has to be pointed at the right columns again on the next bank file. The plan and the recorded history themselves are written and read back in full.
+
 ### JSON export / import
-Lighter alternative if you want to share state without opening Excel — and the format that carries **everything**, including actuals, check-ins and scenarios. Same replace-all semantics. Use the **`{ JSON }`** and **`⇪ JSON`** buttons in the header.
+Lighter if you only want to move state between browsers, and the file is your state itself rather than a rendering of it — plan, actuals, check-ins and scenarios alike. Same replace-all semantics. Use the **`{ JSON }`** and **`⇪ JSON`** buttons in the header.
 
 ### Encrypted export (optional)
 
@@ -247,6 +259,7 @@ Put that file in a cloud-synced folder — iCloud Drive, Dropbox, OneDrive, Goog
 - **Connect a file** creates one; **Use an existing file** adopts one and asks first whether to load it into the app or overwrite it from the browser. **Write now** / **Load from file** force a save or reload; **Reconnect** re-grants permission in a new session; **Disconnect** stops writing and leaves the file as last written
 - It uses the **File System Access API**, so it needs a **Chromium-based browser** (Chrome, Edge, Brave, Opera, Arc) on a **secure origin**. Firefox and Safari don't implement it, and no browser gives a `file://` page write access — serve the folder over `http://localhost` or https. When it's unavailable the panel says which of those reasons applies
 - Writes are debounced and capped at one a second, so editing doesn't thrash the file or your sync client. LocalStorage keeps working alongside it
+- **The connected file holds what an export holds** — a `.json` is the state file itself, a `.xlsx` is the same eight-sheet workbook the ⬇ Excel button writes, and **Load from file** reads either through the ordinary importer. So the round trip has the same one gap a manual export does: see the note under [Excel export / import](#excel-export--import)
 - **Last write wins.** File sync is not merge: if two devices edit at once, one side's edits are lost or you get a conflicted copy. Let one device finish syncing before picking up the next, and hit **Load from file** before editing if another device has been in it
 - Everywhere else — and any time you'd rather not — the **export / import buttons remain the fully-supported path**. Nothing is gated behind live mode
 
@@ -256,14 +269,14 @@ Put that file in a cloud-synced folder — iCloud Drive, Dropbox, OneDrive, Goog
 - Reading a file *you* chose from your disk — an import, or a connected live workbook — is not a network request. Nothing leaves the machine
 - **It will never link to a bank.** No Plaid, no SimpleFIN, no open banking, no OAuth, no credentials — a permanent, deliberate design choice, not a missing feature. Opening a statement file you downloaded yourself is a different thing entirely, and that is [built](#importing-actuals-from-a-file-you-downloaded-yourself)
 - **Completely free, forever.** No tiers, no subscription, no paid features, no licence to buy. There is nothing to sell you because there is no service behind it
-- **Reset** button (trash icon), behind a confirmation, clears every account and transaction and returns settings to their defaults — and **restores the 19 default categories**, including any you renamed or deleted. A clean slate, not an empty one; export first if you want a backup
+- **Reset** button (trash icon), behind a confirmation, clears everything the browser holds — accounts, transactions, imported actuals, check-ins and scenarios — and returns settings to their defaults, while **restoring the 19 default categories**, including any you renamed or deleted. A clean slate, not an empty one. It is undoable and writes a backup first, but export as well if the data matters
 
 ### Quality-of-life
 - **Observation Deck dark theme** — the shared "mission control" design language used across the deck
 - **Currency selector** (USD / EUR / GBP / CAD / AUD / JPY) — changes formatting only; amounts are relabelled, never converted
-- **Export-age indicator** — the header shows *Exported today* / *Exported 12d ago* / *Never exported*, and nags with both export buttons once it's been over a month
-- **Single-level undo** — deleting an account, category, or transaction offers an Undo button in the status message, restoring any reassignments too
-- **Collapsible sections** — Categories, Transactions, Forecast, and Visualizations can each be collapsed to keep the page tidy
+- **Export-age indicator** — the header shows *Exported today* / *Exported 12d ago* / *Never exported*, and once it's been over a month — or was never exported at all — a warning appears with both export buttons in it
+- **Single-level undo** — deleting an account, category or transaction offers an Undo button in the status message, restoring any reassignments too. So do the destructive big ones: an import, a reset, and loading the sample data
+- **Collapsible sections** — every section collapses from its own header: categories, transactions, forecast, balances by account, bills calendar, visualizations, check-in, plan vs actual, debt payoff, goals, scenarios and backup
 - **Empty-state welcome banner** with a "Load sample data" button to explore the app instantly
 - Mobile-responsive layout
 - All forms validate inline; required fields are clearly marked
@@ -286,10 +299,11 @@ site/           ← the whole app. This is what gets deployed
                 debt payoff, goals, the pay-vs-bills calendar, scenarios
   portability.js Live workbook mode (File System Access API) and passphrase encryption (WebCrypto)
   guide.html    The built-in Getting Started guide (deliberately script-free)
-  tests.html    Browser test suite exercising engine.js — open it, no build step, no runner to install
+  tests.html    Browser suite exercising engine.js and importers.js — open it, no build step, no runner to install
   sw.js         Offline shell (service worker), manifest.webmanifest, icon.svg
   vendor/       Chart.js and SheetJS, vendored
 netlify.toml    Publish config and security headers
+docs/           The screenshot at the top of this README
 README.md, LICENSE
 ```
 
@@ -308,16 +322,16 @@ that risk at the source instead of maintaining a blocklist.
 
 ## Running the tests
 
-`tests.html` is the whole test setup. There is nothing to install and no runner to configure — it is a plain page that loads `engine.js` and asserts against it.
+`tests.html` is the whole test setup. There is nothing to install and no runner to configure — it is a plain page that loads `engine.js` and `importers.js` and asserts against them.
 
 ```bash
 cd site && python3 -m http.server 8000
 # then open http://localhost:8000/tests.html
 ```
 
-You can also just double-click `site/tests.html` to open it from disk. The engine suites run either way; the **constraint-guard** suite is skipped on `file://`, because it works by reading the app's own source files as text and a page opened from disk isn't allowed to read its siblings. A banner at the top of the page tells you which mode you're in, and the summary reports passes, failures and skips.
+You can also just double-click `site/tests.html` to open it from disk. The engine and importer suites run either way; the **constraint-guard** suite is skipped on `file://`, because it works by reading the app's own source files as text and a page opened from disk isn't allowed to read its siblings. A banner at the top of the page tells you which mode you're in, and the summary reports passes, failures and skips.
 
-The constraint guard is the section worth knowing about: it scans the source for `fetch`, `XMLHttpRequest`, `WebSocket`, `sendBeacon`, `EventSource`, `RTCPeerConnection` and any external URL, and fails the suite if it finds one. It exists so the "nothing leaves the machine" promise is enforced by a test rather than by anyone's memory of having made it.
+The constraint guard is the section worth knowing about: it scans the source for `fetch`, `XMLHttpRequest`, `WebSocket`, `sendBeacon`, `EventSource`, `RTCPeerConnection`, `importScripts` and any external URL, and fails the suite if it finds one. It also fails on a bank-aggregator hostname in any source file, and on an inline `<script>` or inline event handler in `index.html`, which the deployed CSP would refuse. It exists so the "nothing leaves the machine" promise is enforced by a test rather than by anyone's memory of having made it.
 
 ---
 
@@ -330,7 +344,7 @@ The app migrates older data forward automatically. You don't need to do anything
 - **v3** — `forecastMonths` (number) replaced by `forecastHorizon` (string token, supports `eoy`); `chartHorizons` map added for per-chart overrides
 - **v4** — Observation Deck theme: dark-only design tokens; the `theme` setting is removed (any stored preference is dropped on load), and default category colors are re-skinned to the deck palette (custom colors preserved)
 - **v5** — per-account projected balances: the forecast tracks each account separately instead of only a single combined balance. `account.apr` and `account.minPayment` added so credit cards accrue interest instead of sitting as a static balance; `settings.lastExportAt` records when you last exported, driving the export-age indicator; Goal categories gain optional `target` and `targetDate`, and a default **Savings Goal** category ships. Existing accounts default to no APR, so v4 forecasts are unchanged until you fill the fields in
-- **v6** — reality arrives: `state.actuals` (imported or hand-entered transactions, signed amounts), `state.checkins` (observed account balances), `state.scenarios` (named sets of add/remove/modify ops), `settings.activeScenarioId`, and `settings.importMappings` (the remembered CSV column layout per account). All four default to empty, so a v5 file loads with every new panel simply saying it has nothing yet
+- **v6** — reality arrives: `state.actuals` (rows read from a file you imported, signed amounts), `state.checkins` (observed account balances), `state.scenarios` (named sets of add/remove/modify ops), `settings.activeScenarioId`, and `settings.importMappings` (the remembered CSV column layout per account). They all start empty, so a v5 file loads with every new panel simply saying it has nothing yet
 
 ---
 
@@ -363,7 +377,7 @@ No build step and no dependencies to install — edit a file and refresh the bro
 | Check-ins, per-account balances, plan-vs-actual, debt payoff, goals, calendar, scenarios | `site/features.js` |
 | Live workbook mode and encrypted export | `site/portability.js` |
 | The Getting Started guide | `site/guide.html` |
-| Engine tests | `site/tests.html` |
+| Engine and importer tests | `site/tests.html` |
 
 House rules worth knowing before you open a PR:
 

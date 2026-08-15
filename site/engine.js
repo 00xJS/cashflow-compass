@@ -554,6 +554,16 @@ function buildForecastFromState(months) {
     const orphans = [];
     const mismatches = [];
     const movements = []; // { date, idx, target, delta } — delta in the account's own units
+    // Money transferred into a savings or goal category. It is deliberately kept
+    // out of monthlyByCategory: that map means "money spent" and feeds the spend
+    // doughnut, the biggest-category card and the savings rate, none of which a
+    // transfer belongs in. But a goal funded the way the guide recommends — a
+    // monthly transfer into savings — has to be visible to goal tracking, and
+    // this is where it lives.
+    const monthlyContributionsByCategory = {};
+    // Cards the user pays themselves, so the minimum payment below is never
+    // generated on top of a payment they have already modelled.
+    const userPaidCards = new Set();
 
     // Per-tx monthly buckets
     const txData = transactions.map(tx => {
@@ -597,7 +607,17 @@ function buildForecastFromState(months) {
             } else {
                 const destId = dest ? dest.id : UNASSIGNED_ACCOUNT;
                 const srcId  = src  ? src.id  : UNASSIGNED_ACCOUNT;
+                // A goal is tracked by the category the money is filed under, not
+                // by which accounts it crossed, so the contribution counts even
+                // when neither side names an account.
+                if (idx >= 0 && cat && (cat.kind === 'goal' || cat.kind === 'savings')) {
+                    if (!monthlyContributionsByCategory[tx.categoryId]) {
+                        monthlyContributionsByCategory[tx.categoryId] = new Array(months).fill(0);
+                    }
+                    monthlyContributionsByCategory[tx.categoryId][idx] += amt;
+                }
                 if (destId !== srcId) {
+                    if (isCreditAccount(dest)) userPaidCards.add(destId);
                     move(destId, isCreditAccount(dest) ? -amt : amt);
                     move(srcId,  isCreditAccount(src)  ?  amt : -amt);
                 }
@@ -631,7 +651,13 @@ function buildForecastFromState(months) {
             monthly: new Array(months).fill(0),
             running: new Array(months).fill(0),
             daysInRed: 0,
-            lowest: { date: new Date(horizonStart), balance: 0 }
+            lowest: { date: new Date(horizonStart), balance: 0 },
+            // Filled in by the minimum-payment pass below. Present on every entry
+            // so the UI never has to test for the key.
+            autoMinPayment: false,
+            autoMinPaymentTotal: 0,
+            autoMinPaymentFrom: null,
+            autoMinPaymentOut: 0
         };
         byAccount[a.id] = entry;
         return entry;
@@ -641,7 +667,9 @@ function buildForecastFromState(months) {
         liquid: true, credit: false, apr: 0, minPayment: 0,
         startRaw: 0, start: 0, dayNet: [],
         monthly: new Array(months).fill(0), running: new Array(months).fill(0),
-        daysInRed: 0, lowest: { date: new Date(horizonStart), balance: 0 }
+        daysInRed: 0, lowest: { date: new Date(horizonStart), balance: 0 },
+        autoMinPayment: false, autoMinPaymentTotal: 0,
+        autoMinPaymentFrom: null, autoMinPaymentOut: 0
     };
     const walkTargets = accountsList.concat([unassigned]);
     const targetById = {};
@@ -652,6 +680,46 @@ function buildForecastFromState(months) {
         if (!t) return;
         if (m.idx < 0) t.start += m.delta;
         else t.monthly[m.idx] += m.delta;
+    });
+
+    // Minimum payments on cards the user has not modelled a payment for. Without
+    // this a card with a minimum on file compounds forever in the cash forecast
+    // while the payoff planner — which does apply the minimum — reports it clears:
+    // two views of the same card contradicting each other. A payment the user has
+    // modelled always wins; generating one on top of theirs would charge them the
+    // minimum twice, which is worse than saying nothing.
+    //
+    // The money has to leave a real account, and no card carries a payment
+    // account, so it comes out of the largest liquid balance — the one most
+    // likely to cover it — and the card is flagged so the UI can say the payment
+    // was assumed rather than entered.
+    const payFrom = accountsList
+        .filter(t => t.liquid)
+        .reduce((best, t) => (best && best.start >= t.start ? best : t), null) || unassigned;
+    accountsList.forEach(t => {
+        if (!t.credit || !(t.minPayment > 0) || userPaidCards.has(t.id)) return;
+        const monthlyRate = t.apr / 100 / 12;
+        let bal = t.start;
+        for (let i = 0; i < months; i++) {
+            // Same order the balance walk below uses: interest, then the month's
+            // charges, then the payment — capped at what is actually owed, so a
+            // minimum larger than the balance clears it and stops rather than
+            // pushing it through zero into a phantom credit.
+            if (monthlyRate && bal > 0) bal += bal * monthlyRate;
+            bal += t.monthly[i];
+            const pay = Math.min(t.minPayment, bal);
+            if (!(pay > 0)) continue;
+            bal -= pay;
+            t.monthly[i] -= pay;
+            payFrom.monthly[i] -= pay;
+            t.autoMinPayment = true;
+            t.autoMinPaymentTotal += pay;
+            t.autoMinPaymentFrom = payFrom.id;
+            payFrom.autoMinPaymentOut += pay;
+            const due = endOfMonth(monthList[i].date);
+            movements.push({ date: due, idx: i, target: t.id, delta: -pay });
+            movements.push({ date: due, idx: i, target: payFrom.id, delta: -pay });
+        }
     });
 
     // Every movement from the snapshot onwards, day by day — including the ones
@@ -767,6 +835,7 @@ function buildForecastFromState(months) {
     return {
         monthList, txData, startingBalance, startingNetWorth,
         monthlyIncome, monthlyExpense, monthlyNet, monthlyByCategory,
+        monthlyContributionsByCategory,
         runningBalance, netWorthRunning, daysInRed, lowest,
         byAccount, accountsList, unassigned,
         firstNegativeDate, tightestWeek,
@@ -928,8 +997,21 @@ function goalProgress(forecast) {
     const months = forecast.monthList.length;
     const horizonStart = forecast.horizonStart || startOfMonth(new Date());
     const byCategory = forecast.monthlyByCategory || {};
+    const byContribution = forecast.monthlyContributionsByCategory || {};
     return state.categories.filter(c => c.kind === 'goal').map(c => {
-        const series = byCategory[c.id] || new Array(months).fill(0);
+        // A goal is funded either by a transfer into it or by an expense-kind row
+        // filed under it. The two maps are disjoint by construction — a
+        // transaction lands in one or the other, never both — so reading both
+        // counts a goal funded either way, or both ways, without ever counting the
+        // same money twice.
+        const contributed = byContribution[c.id];
+        const spent = byCategory[c.id];
+        const series = new Array(months).fill(0);
+        for (let i = 0; i < months; i++) {
+            const moved = contributed ? contributed[i] : 0;
+            const filed = spent ? spent[i] : 0;
+            series[i] = (Number.isFinite(moved) ? moved : 0) + (Number.isFinite(filed) ? filed : 0);
+        }
         const accumulated = series.reduce((s, n) => s + n, 0);
         const monthly = months > 0 ? accumulated / months : 0;
         const target = Math.max(0, parseFloat(c.target) || 0);
@@ -947,9 +1029,25 @@ function goalProgress(forecast) {
                 eta = endOfMonth(addMonths(horizonStart, months - 1 + more));
             }
         }
+        // What the target and the date together demand each month. Nothing is
+        // banked in this model — `accumulated` is itself projected contributions —
+        // so the whole target has to come out of the months still ahead. The
+        // current month is not one of them: it is already partly spent, and
+        // counting it is what would divide by zero on a date that has passed.
+        // A date in the past or in the current month therefore has no required
+        // figure at all, and the UI says the date has gone.
+        const monthsLeft = targetDate ? monthsBetween(horizonStart, startOfMonth(targetDate)) : 0;
+        let required = null;
+        if (target > 0 && targetDate && monthsLeft > 0) {
+            const perMonth = target / monthsLeft;
+            if (Number.isFinite(perMonth)) required = perMonth;
+        }
         return {
             id: c.id, name: c.name, color: c.color,
             monthly, accumulated, target, targetDate, eta,
+            required,
+            shortfall: required == null ? null : Math.max(0, required - monthly),
+            monthsLeft: targetDate ? monthsLeft : null,
             pct: target > 0 ? Math.min(100, (accumulated / target) * 100) : null,
             onTrack: (target > 0 && targetDate) ? !!(eta && eta <= targetDate) : null
         };
@@ -1500,6 +1598,22 @@ function computeInsights(forecast) {
             tone: 'fact', label: 'Biggest Category',
             value: top.name,
             sub: `${fmtPct(pct)} of spend (${fmtMoney(top.total)} over ${months} mo)`
+        });
+    }
+
+    // Spend concentration. One large category on its own says little; how much of
+    // the outflow the top three carry says whether the plan turns on a few big
+    // levers or is spread thin across many small ones. Under four categories the
+    // share is trivially near 100% and the card would only state the obvious.
+    if (catTotals.length >= 4 && totalExpense > 0) {
+        const top3 = catTotals.slice(0, 3);
+        const top3Total = top3.reduce((s, c) => s + c.total, 0);
+        const pct = Math.min(100, (top3Total / totalExpense) * 100);
+        cards.push({
+            tone: pct >= 70 ? 'info' : 'fact', label: 'Spend Concentration',
+            value: fmtPct(pct) + ' in top 3',
+            sub: `${top3.map(c => c.name).join(', ')} — ${fmtMoney(top3Total)} of ` +
+                 `${fmtMoney(totalExpense)} across ${catTotals.length} categories`
         });
     }
 

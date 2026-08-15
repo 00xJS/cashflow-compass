@@ -25,6 +25,16 @@ function setVal(id, value) { const node = el(id); if (node) node.value = value; 
 function setHidden(id, hidden) { const node = el(id); if (node) node.classList.toggle('hidden', hidden); }
 function on(id, event, handler) { const node = el(id); if (node) node.addEventListener(event, handler); }
 
+// An explicit behavior beats the stylesheet's scroll-behavior under CSSOM-View,
+// so asking for 'smooth' here would animate for someone who asked for no motion.
+function prefersReducedMotion() {
+    return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+function scrollSectionIntoView(id) {
+    const section = el(id);
+    if (section) section.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+}
+
 const HEX_COLOR = /^#[0-9a-f]{3,8}$/i;
 
 function cssVar(name, fallback) {
@@ -220,27 +230,31 @@ function toggleSort(table, column) {
     else if (table === 'transactions') renderTransactions();
 }
 
-// Sortable headers are real controls: keyboard reachable, and they announce
-// the current sort through aria-sort.
+// Sortable headers are real controls: keyboard reachable, and they announce the
+// current sort through aria-sort. The cell keeps its implicit columnheader role,
+// because aria-sort is only honoured there and because a header that stops being
+// announced as a header costs more than it buys — so the control is a button
+// inside the cell rather than a role stamped over it. The button is stripped back
+// to the cell's own typography; the page's stylesheet never sees this markup.
+const SORT_BUTTON_STYLE = 'background:none;border:0;margin:0;padding:0;font:inherit;color:inherit;' +
+    'letter-spacing:inherit;text-transform:inherit;cursor:inherit;';
+
 function sortableTh(table, column, label, extraClass) {
     const s = sortState[table];
     const ariaSort = s.column === column ? (s.direction === 'asc' ? 'ascending' : 'descending') : 'none';
-    return `<th class="sortable${extraClass ? ' ' + extraClass : ''}" data-sort="${escapeHtml(column)}" role="button" tabindex="0"` +
-        ` aria-sort="${ariaSort}" title="Sort by ${escapeHtml(label)}">${escapeHtml(label)}` +
-        ` <span class="ind" aria-hidden="true">${sortIndicator(table, column)}</span></th>`;
+    return `<th class="sortable${extraClass ? ' ' + extraClass : ''}" data-sort="${escapeHtml(column)}" aria-sort="${ariaSort}">` +
+        `<button type="button" tabindex="0" style="${SORT_BUTTON_STYLE}" title="Sort by ${escapeHtml(label)}">${escapeHtml(label)}` +
+        ` <span class="ind" aria-hidden="true">${sortIndicator(table, column)}</span></button></th>`;
 }
 
 function wireSortHeaders(row, table) {
     if (!row) return;
     row.querySelectorAll('[data-sort]').forEach(th => {
         const column = th.dataset.sort;
-        th.onclick = () => toggleSort(table, column);
-        th.onkeydown = e => {
-            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
-                e.preventDefault();
-                toggleSort(table, column);
-            }
-        };
+        const btn = th.querySelector('button');
+        // A real button already answers Enter and Space by firing click, so a key
+        // handler beside this one would sort twice for a single press.
+        if (btn) btn.onclick = () => toggleSort(table, column);
     });
 }
 
@@ -563,8 +577,7 @@ function editAccount(id) {
     setText('acctSubmitBtn', 'Update Account');
     setHidden('acctCancelBtn', false);
     setText('acctEditingHint', 'Editing ' + a.name);
-    const section = el('section-accounts');
-    if (section) section.scrollIntoView({ behavior: 'smooth' });
+    scrollSectionIntoView('section-accounts');
 }
 
 function deleteAccount(id) {
@@ -664,12 +677,16 @@ function renderCategories() {
     if (!tbody) return;
     const usage = {};
     state.transactions.forEach(t => { usage[t.categoryId] = (usage[t.categoryId] || 0) + 1; });
+    const canMove = state.categories.length > 1;
     tbody.innerHTML = sorted.map(c => `
         <tr>
             <td><span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:${safeColor(c.color)};vertical-align:middle;"></span></td>
             <td>${escapeHtml(c.name)}${usage[c.id] ? ` <span class="muted-text">${usage[c.id]} in use</span>` : ''}</td>
             <td><span class="tag">${escapeHtml(KIND_LABELS[c.kind] || c.kind)}</span></td>
             <td class="num row-actions">
+                ${usage[c.id] && canMove
+                    ? `<button class="icon" data-move-cat="${escapeHtml(c.id)}" aria-label="Move the ${usage[c.id]} transaction(s) filed under ${escapeHtml(c.name)} to another category" title="Move its transactions elsewhere">⇄</button>`
+                    : ''}
                 <button class="icon" data-edit-cat="${escapeHtml(c.id)}" aria-label="Edit category ${escapeHtml(c.name)}" title="Edit">✎</button>
                 <button class="icon" data-del-cat="${escapeHtml(c.id)}" aria-label="Delete category ${escapeHtml(c.name)}" title="Delete">✕</button>
             </td>
@@ -677,6 +694,37 @@ function renderCategories() {
     `).join('');
     tbody.querySelectorAll('[data-edit-cat]').forEach(b => b.onclick = () => editCategory(b.dataset.editCat));
     tbody.querySelectorAll('[data-del-cat]').forEach(b => b.onclick = () => deleteCategory(b.dataset.delCat));
+    tbody.querySelectorAll('[data-move-cat]').forEach(b => b.onclick = () => reassignCategory(b.dataset.moveCat));
+}
+
+// Moving a category's transactions used to be reachable only by deleting the
+// category, which forced a destination on someone who only wanted to re-file.
+function reassignCategory(id) {
+    const cat = state.categories.find(c => c.id === id);
+    if (!cat) return;
+    const moving = state.transactions.filter(t => t.categoryId === id);
+    if (!moving.length) {
+        flashStatus(`${cat.name} has no transactions to move.`, { tone: 'warning' });
+        return;
+    }
+    const choices = state.categories.filter(c => c.id !== id)
+        .map(c => ({ value: c.id, label: `${c.name} — ${KIND_LABELS[c.kind] || c.kind}` }));
+    if (!choices.length) {
+        showNotice('warning', `${cat.name} is the only category, so there is nowhere to move its transactions.`);
+        return;
+    }
+    confirmModal('Move these transactions?',
+        `${moving.length} transaction(s) filed under ${cat.name} will be re-filed. ${cat.name} itself is kept.`,
+        destination => {
+            const to = state.categories.find(c => c.id === destination);
+            if (!to) return;
+            snapshotForUndo(`moving ${moving.length} transaction(s) out of ${cat.name}`);
+            moving.forEach(t => { t.categoryId = to.id; });
+            saveState();
+            renderAll();
+            flashWithUndo(`Moved ${moving.length} transaction(s) from ${cat.name} to ${to.name}.`);
+        },
+        { choices, choiceLabel: 'Move them to', confirmLabel: 'Move', confirmClass: 'primary' });
 }
 
 function editCategory(id) {
@@ -758,20 +806,50 @@ function cancelCategoryEdit() {
 
 on('catCancelBtn', 'click', cancelCategoryEdit);
 
+/* ───── Collapsible sections ───── */
+
+// Every section header that advertises aria-expanded has to actually collapse,
+// or the promise is a lie to anything reading the page programmatically.
+const COLLAPSIBLE_TOGGLES = [
+    'catToggle', 'txToggle', 'forecastToggle', 'chartsToggle', 'balancesToggle',
+    'calendarToggle', 'checkinToggle', 'varianceToggle', 'debtToggle', 'goalsToggle',
+    'scenariosToggle', 'portabilityToggle'
+];
+
+// The glyph gets its own element because the button's accessible name is a
+// sibling of it: writing the arrow into the button's text content would delete
+// that name and leave a control announced as nothing but an arrow.
+function toggleGlyph(btn) {
+    let glyph = btn.querySelector('.toggle-glyph');
+    if (!glyph) {
+        glyph = document.createElement('span');
+        glyph.className = 'toggle-glyph';
+        glyph.setAttribute('aria-hidden', 'true');
+        // A loose arrow character sitting directly in the button would be read
+        // out as part of the name and would double up with the one below.
+        Array.prototype.slice.call(btn.childNodes)
+            .filter(node => node.nodeType === 3)
+            .forEach(node => btn.removeChild(node));
+        btn.appendChild(glyph);
+    }
+    return glyph;
+}
+
 function setupCollapsible(toggleId, bodyId) {
-    const btn = document.getElementById(toggleId);
-    const body = document.getElementById(bodyId);
-    if (!btn || !body) return;
-    btn.onclick = () => {
-        const collapsed = body.classList.toggle('hidden');
-        btn.textContent = collapsed ? '▸' : '▾';
+    const btn = el(toggleId);
+    if (!btn) return;
+    const body = el(bodyId || btn.getAttribute('aria-controls'));
+    if (!body) return;
+    const glyph = toggleGlyph(btn);
+    const paint = collapsed => {
+        glyph.textContent = collapsed ? '▸' : '▾';
         btn.setAttribute('aria-expanded', String(!collapsed));
     };
+    paint(body.classList.contains('hidden'));
+    btn.onclick = () => paint(body.classList.toggle('hidden'));
 }
-setupCollapsible('catToggle',      'catBody');
-setupCollapsible('txToggle',       'txBody');
-setupCollapsible('forecastToggle', 'forecastBody');
-setupCollapsible('chartsToggle',   'chartsGrid');
+
+COLLAPSIBLE_TOGGLES.forEach(id => setupCollapsible(id));
 
 /* ───── Rendering: Transactions ───── */
 
@@ -949,8 +1027,7 @@ function editTransaction(id) {
     setHidden('txCancelBtn', false);
     setText('txEditingHint', 'Editing ' + t.name);
     onKindOrFreqChange();
-    const section = el('section-transactions');
-    if (section) section.scrollIntoView({ behavior: 'smooth' });
+    scrollSectionIntoView('section-transactions');
 }
 
 function deleteTransaction(id) {
@@ -1082,7 +1159,6 @@ on('txForm', 'submit', e => {
     resetTxForm();
     saveState();
     renderAll();
-    if (amount === 0) flashStatus(`${name} has a zero amount, so it will not move the forecast.`, { tone: 'warning' });
 });
 
 function resetTxForm() {
@@ -1160,6 +1236,14 @@ function ensureWarningStrip() {
     return strip;
 }
 
+// Notes from the last import outlive their toast: a rejected currency code or a
+// zero-amount row is a standing data-quality problem, not a passing message.
+let lastImportIssues = [];
+
+function setImportIssues(issues) {
+    lastImportIssues = Array.isArray(issues) ? issues.slice() : [];
+}
+
 // The strip is emptied when there is nothing to say — the stylesheet hides it
 // with :empty, so leaving stale nodes behind would leave an empty box on screen.
 function renderForecastWarnings(forecast) {
@@ -1168,7 +1252,8 @@ function renderForecastWarnings(forecast) {
     strip.textContent = '';
     const groups = [
         { heading: 'Pointing at something that no longer exists', items: issueList(forecast.orphans) },
-        { heading: 'Filed against a category that contradicts them', items: issueList(forecast.mismatches) }
+        { heading: 'Filed against a category that contradicts them', items: issueList(forecast.mismatches) },
+        { heading: 'Noted while reading the imported file', items: lastImportIssues.slice(), dismissible: true }
     ].filter(g => g.items.length);
     if (!groups.length) return;
     groups.forEach(group => {
@@ -1186,6 +1271,16 @@ function renderForecastWarnings(forecast) {
             list.appendChild(li);
         }
         strip.append(heading, list);
+        // Import notes describe a moment rather than the current data, so they
+        // need a way out; the forecast's own findings come back on every render.
+        if (group.dismissible) {
+            const dismiss = document.createElement('button');
+            dismiss.type = 'button';
+            dismiss.className = 'ghost';
+            dismiss.textContent = 'Dismiss these import notes';
+            dismiss.onclick = () => { setImportIssues([]); renderForecastWarnings(forecast); };
+            strip.appendChild(dismiss);
+        }
     });
 }
 
@@ -1422,6 +1517,27 @@ function setChartRange(key, months) {
     setText('range-' + key, ' · ' + months + 'mo · ' + horizonRangeLabel(months));
 }
 
+// A scaled tick keeps one decimal ($1.2k), which is neither of the two shapes
+// engine.js caches, so the axis keeps its own — still built once per currency
+// rather than once per tick.
+const AXIS_FORMATTERS = new Map();
+
+function axisScaledFormatter(currency) {
+    let f = AXIS_FORMATTERS.get(currency);
+    if (!f) {
+        const options = { style: 'currency', minimumFractionDigits: 0, maximumFractionDigits: 1 };
+        // Guarded the way engine.js guards its own: a tick callback that throws
+        // takes the whole chart down with it.
+        try {
+            f = new Intl.NumberFormat(undefined, Object.assign({ currency }, options));
+        } catch (e) {
+            f = new Intl.NumberFormat(undefined, Object.assign({ currency: 'USD' }, options));
+        }
+        AXIS_FORMATTERS.set(currency, f);
+    }
+    return f;
+}
+
 // Axis ticks need genuinely short labels — $1.2k, not $1,234.
 function axisMoney(n) {
     const value = isNaN(n) ? 0 : Number(n);
@@ -1430,15 +1546,11 @@ function axisMoney(n) {
         : abs >= 1e6 ? { suffix: 'M', div: 1e6 }
         : abs >= 1e3 ? { suffix: 'k', div: 1e3 }
         : { suffix: '', div: 1 };
-    const scaled = value / unit.div;
-    try {
-        return new Intl.NumberFormat(undefined, {
-            style: 'currency', currency: (state.settings.currency || 'USD'),
-            minimumFractionDigits: 0, maximumFractionDigits: unit.div === 1 ? 0 : 1
-        }).format(scaled) + unit.suffix;
-    } catch (e) {
-        return scaled.toFixed(unit.div === 1 ? 0 : 1) + unit.suffix;
-    }
+    // A stored code Intl does not know throws on construction, and the caught
+    // error used to cost every axis in the app its currency symbol.
+    const currency = normalizeCurrency(state && state.settings ? state.settings.currency : null);
+    if (unit.div === 1) return moneyFormatter(currency, true).format(value);
+    return axisScaledFormatter(currency).format(value / unit.div) + unit.suffix;
 }
 
 const moneyTicks = { callback: v => axisMoney(v) };
@@ -1461,6 +1573,66 @@ function categorySeries(fc) {
 const moneyTooltip = {
     callbacks: { label: ctx => `${ctx.dataset.label || ctx.label}: ${fmtMoney(ctx.parsed.y ?? ctx.parsed)}` }
 };
+
+/* A legend down the side of a doughnut takes a fixed slice of the width, which
+ * on a phone leaves the plot itself with almost nothing. Below this width the
+ * legend goes underneath instead. */
+const WIDE_LEGEND_MIN_PX = 700;
+
+function viewportWidth() {
+    return window.innerWidth || document.documentElement.clientWidth || 0;
+}
+function doughnutLegendPosition() {
+    return viewportWidth() < WIDE_LEGEND_MIN_PX ? 'bottom' : 'right';
+}
+
+// Chart.js reflows a canvas on its own; only a crossing of the width threshold
+// needs the chart rebuilt, and only the two charts that read it.
+let lastLegendPosition = doughnutLegendPosition();
+let legendResizeTimer = null;
+window.addEventListener('resize', () => {
+    clearTimeout(legendResizeTimer);
+    legendResizeTimer = setTimeout(() => {
+        const next = doughnutLegendPosition();
+        if (next === lastLegendPosition) return;
+        lastLegendPosition = next;
+        ['category', 'income'].forEach(key => { if (charts[key]) renderChart(key); });
+    }, 200);
+});
+
+/* The p25/p75 corridor is drawn only where engine.js can build one from recorded
+ * history. A band invented from the plan alone would look exactly as confident
+ * as one earned from a year of statements, so there is no fallback here. */
+function balanceBands(forecast) {
+    if (typeof confidenceBands !== 'function' || typeof categoryVolatility !== 'function') return null;
+    try {
+        return confidenceBands(forecast, categoryVolatility(Array.isArray(state.actuals) ? state.actuals : []));
+    } catch (e) {
+        console.warn('The confidence band could not be computed', e);
+        return null;
+    }
+}
+
+const BAND_NOTE_PRESENT = 'The shaded corridor is where the balance lands if each category spends at the ' +
+    'quarter and three-quarter marks of its own recorded history.';
+const BAND_NOTE_ABSENT = 'A likely range appears here once a category has three full months of imported actuals behind it.';
+
+function setBalanceBandNote(text) {
+    const card = chartCard('balance');
+    if (!card) return;
+    let note = card.querySelector('.chart-note');
+    if (!text) {
+        if (note) note.remove();
+        return;
+    }
+    if (!note) {
+        note = document.createElement('p');
+        note.className = 'chart-note muted-text';
+        note.style.cssText = 'margin:8px 0 0;font-size:12px;';
+        card.appendChild(note);
+    }
+    note.textContent = text;
+}
 
 const chartRenderers = {
     monthly(months, T) {
@@ -1491,16 +1663,38 @@ const chartRenderers = {
         const labels = fc.monthList.map(m => m.label);
         if (!fc.runningBalance.length || (fc.startingBalance === 0 && !fc.runningBalance.some(n => n !== 0))) {
             showChartEmpty('balance', 'Add an account balance or a transaction to project cash.');
+            setBalanceBandNote('');
             return;
         }
         clearChartEmpty('balance');
+        const bands = balanceBands(fc);
+        // Chart.js draws the last dataset first, so the plan stays at index 0 to
+        // keep it on top of any corridor behind it.
+        const datasets = [{
+            label: 'Projected Cash', data: fc.runningBalance,
+            // Filling to the axis under a corridor would bury it.
+            fill: !bands, borderColor: T.accent,
+            backgroundColor: T.accentFill, tension: 0.3
+        }];
+        if (bands) {
+            // Both figures are outflows, so p25 is the HIGHER balance: spending at
+            // the quarter mark leaves more behind. p75 fills back to it.
+            const edge = hexToRgba(T.accent, 0.35);
+            datasets.push({
+                label: 'If spending runs low', data: bands.p25,
+                borderColor: edge, borderWidth: 1, borderDash: [4, 4],
+                pointRadius: 0, fill: false, tension: 0.3
+            });
+            datasets.push({
+                label: 'If spending runs high', data: bands.p75,
+                borderColor: edge, borderWidth: 1, borderDash: [4, 4],
+                pointRadius: 0, fill: '-1', backgroundColor: hexToRgba(T.accent, 0.1), tension: 0.3
+            });
+        }
+        setBalanceBandNote(bands ? BAND_NOTE_PRESENT : BAND_NOTE_ABSENT);
         charts.balance = new Chart(chartCanvas('balance'), {
             type: 'line',
-            data: { labels, datasets: [{
-                label: 'Projected Cash', data: fc.runningBalance,
-                fill: true, borderColor: T.accent,
-                backgroundColor: T.accentFill, tension: 0.3
-            }] },
+            data: { labels, datasets },
             options: { responsive: true, maintainAspectRatio: false,
                 scales: { y: { ticks: moneyTicks } },
                 plugins: { tooltip: moneyTooltip } }
@@ -1541,7 +1735,7 @@ const chartRenderers = {
             data: { labels: totals.map(e => e.name),
                 datasets: [{ data: totals.map(e => e.total), backgroundColor: totals.map(e => e.color), borderColor: T.card }] },
             options: { responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { position: 'right', labels: { boxWidth: 12 } },
+                plugins: { legend: { position: doughnutLegendPosition(), labels: { boxWidth: 12 } },
                     tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtMoney(ctx.parsed)}` } } } }
         });
     },
@@ -1623,7 +1817,7 @@ const chartRenderers = {
             data: { labels: totals.map(x => x.name),
                 datasets: [{ data: totals.map(x => x.total), backgroundColor: totals.map(x => x.color), borderColor: T.card }] },
             options: { responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { position: 'right', labels: { boxWidth: 12 } },
+                plugins: { legend: { position: doughnutLegendPosition(), labels: { boxWidth: 12 } },
                     tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtMoney(ctx.parsed)}` } } } }
         });
     }
@@ -1722,7 +1916,7 @@ function renderInsights(forecast) {
 const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', GBP: '£', CAD: '$', AUD: '$', JPY: '¥' };
 
 function moneyNumberFormat() {
-    const cur = (state.settings.currency || 'USD').toUpperCase();
+    const cur = normalizeCurrency(state.settings.currency);
     const sym = CURRENCY_SYMBOLS[cur] || '';
     const body = cur === 'JPY' ? '#,##0' : '#,##0.00';
     return sym ? `"${sym}"${body};-"${sym}"${body}` : `${body};-${body}`;
@@ -1757,6 +1951,41 @@ function buildSheet(rows, opts = {}) {
 function dateCell(value) {
     const d = toDate(value);
     return d || '';
+}
+
+/* A scenario is a name over an ordered list of edits, so the sheet takes a row
+ * per edit. A scenario with no edits still gets one, or its name would not
+ * survive the trip. Each field a scenario is allowed to patch has its own
+ * column; an added transaction is a whole object, so it travels as JSON. */
+const SCENARIO_PATCH_COLUMNS = ['amount', 'startDate', 'endDate', 'paused', 'escalation'];
+const SCENARIO_SHEET_HEAD = ['scenarioId', 'scenarioName', 'op', 'txId'].concat(SCENARIO_PATCH_COLUMNS, ['tx']);
+
+function scenarioSheetRows() {
+    const rows = [SCENARIO_SHEET_HEAD];
+    (Array.isArray(state.scenarios) ? state.scenarios : []).forEach(sc => {
+        if (!sc) return;
+        const id = toText(sc.id);
+        const name = toText(sc.name);
+        const ops = Array.isArray(sc.ops) ? sc.ops : [];
+        if (!ops.length) {
+            rows.push([id, name, '', '', '', '', '', '', '', '']);
+            return;
+        }
+        ops.forEach(op => {
+            if (!op) return;
+            const patch = (op.op === 'modify' && op.patch && typeof op.patch === 'object') ? op.patch : {};
+            rows.push([
+                id, name, toText(op.op), toText(op.txId || ''),
+                patch.amount === undefined ? '' : (parseFloat(patch.amount) || 0),
+                patch.startDate === undefined ? '' : dateCell(patch.startDate),
+                (patch.endDate === undefined || patch.endDate === null) ? '' : dateCell(patch.endDate),
+                patch.paused === undefined ? '' : (patch.paused ? 'TRUE' : 'FALSE'),
+                patch.escalation === undefined ? '' : (parseFloat(patch.escalation) || 0),
+                (op.op === 'add' && op.tx) ? JSON.stringify(op.tx) : ''
+            ]);
+        });
+    });
+    return rows;
 }
 
 function exportExcel() {
@@ -1799,11 +2028,40 @@ function exportExcel() {
         money: [3], dates: [10, 11], autofilter: true
     }), 'Transactions');
 
+    // Recorded history belongs in the workbook as much as the plan does — the
+    // live-file feature writes through this same builder, so anything missing
+    // here is thrown away every time the file is read back.
+    const actualRows = [['id','date','amount','payee','accountId','categoryId','importedId','matchedTxId','source']];
+    (Array.isArray(state.actuals) ? state.actuals : []).forEach(a => actualRows.push([
+        a.id, dateCell(a.date), parseFloat(a.amount) || 0, a.payee || '',
+        a.accountId || '', a.categoryId || '', a.importedId || '', a.matchedTxId || '', a.source || 'manual'
+    ]));
+    XLSX.utils.book_append_sheet(wb, buildSheet(actualRows, {
+        cols: [{ wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 30 }, { wch: 18 }, { wch: 18 }, { wch: 22 }, { wch: 18 }, { wch: 10 }],
+        money: [2], dates: [1], autofilter: true
+    }), 'Actuals');
+
+    const checkinRows = [['id','date','accountId','balance']];
+    (Array.isArray(state.checkins) ? state.checkins : []).forEach(c => checkinRows.push([
+        c.id, dateCell(c.date), c.accountId || '', parseFloat(c.balance) || 0
+    ]));
+    XLSX.utils.book_append_sheet(wb, buildSheet(checkinRows, {
+        cols: [{ wch: 18 }, { wch: 12 }, { wch: 18 }, { wch: 14 }],
+        money: [3], dates: [1], autofilter: true
+    }), 'Checkins');
+
+    XLSX.utils.book_append_sheet(wb, buildSheet(scenarioSheetRows(), {
+        cols: [{ wch: 20 }, { wch: 26 }, { wch: 10 }, { wch: 18 }, { wch: 12 },
+            { wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 11 }, { wch: 40 }],
+        money: [4], dates: [5, 6], autofilter: true
+    }), 'Scenarios');
+
     const settingsRows = [
         ['key','value'],
         ['schemaVersion', SCHEMA_VERSION],
         ['currency', state.settings.currency],
-        ['forecastHorizon', state.settings.forecastHorizon]
+        ['forecastHorizon', state.settings.forecastHorizon],
+        ['activeScenarioId', state.settings.activeScenarioId || '']
     ];
     // Per-chart horizons round-trip as one row each so they survive the workbook.
     const overrides = state.settings.chartHorizons || {};
@@ -1815,7 +2073,7 @@ function exportExcel() {
     // Forecast (read-only export of current projection)
     const fc = buildForecast(resolveHorizon(state.settings.forecastHorizon));
     const byId = new Map(fc.txData.map(d => [d.tx.id, d]));
-    const fcHead = ['Item','Kind', ...fc.monthList.map(m => m.label), 'Total'];
+    const fcHead = ['Item','Category', ...fc.monthList.map(m => m.label), 'Total'];
     const fcRows = [fcHead];
     state.transactions.forEach(t => {
         const data = byId.get(t.id);
@@ -1918,11 +2176,17 @@ function coerceTransaction(r, label, issues) {
         issues.push(`${label}: the end date ${endDate} is before the start date ${startDate} — the end date was dropped.`);
         endDate = null;
     }
+    const amount = toNum(r.amount, 0);
+    // Kept rather than dropped — the row may be a placeholder someone means to
+    // fill in — but a silent zero is a forecast line that can never move.
+    if (amount === 0) {
+        issues.push(`${label}: the amount is zero, so this row will sit in the forecast without ever moving it.`);
+    }
     return {
         id: r.id ? toText(r.id) : uid('tx'),
         name: toText(r.name).trim(),
         kind: TX_KINDS.includes(toText(r.kind)) ? toText(r.kind) : 'expense',
-        amount: toNum(r.amount, 0),
+        amount,
         categoryId: r.categoryId ? toText(r.categoryId) : '',
         accountId: r.accountId ? toText(r.accountId) : '',
         fromAccountId: r.fromAccountId ? toText(r.fromAccountId) : null,
@@ -1936,6 +2200,81 @@ function coerceTransaction(r, label, issues) {
         notes: toText(r.notes),
         paused: toBool(r.paused)
     };
+}
+
+/* Recorded history and what-ifs are coerced too, but they are not the plan: an
+ * unreadable row here is dropped rather than repaired, because inventing a
+ * balance or an observed amount would be inventing evidence. */
+function coerceActual(r) {
+    const date = normalizeDate(r.date, null, null);
+    const amount = toNum(r.amount, NaN);
+    if (!date || !isFinite(amount)) return null;
+    return {
+        id: r.id ? toText(r.id) : uid('act'),
+        date,
+        amount,
+        payee: toText(r.payee).trim() || '(no description)',
+        accountId: r.accountId ? toText(r.accountId) : null,
+        categoryId: r.categoryId ? toText(r.categoryId) : null,
+        importedId: r.importedId ? toText(r.importedId) : null,
+        matchedTxId: r.matchedTxId ? toText(r.matchedTxId) : null,
+        source: toText(r.source).trim() || 'manual'
+    };
+}
+
+function coerceCheckin(r) {
+    const date = normalizeDate(r.date, null, null);
+    const balance = toNum(r.balance, NaN);
+    if (!date || !isFinite(balance)) return null;
+    return {
+        id: r.id ? toText(r.id) : uid('chk'),
+        date,
+        accountId: r.accountId ? toText(r.accountId) : null,
+        balance
+    };
+}
+
+// A scenario may only ever add, remove, or patch a short list of fields — the
+// same list engine.js enforces when it applies one. Anything else in the file is
+// dropped here so a malformed import cannot reach into the plan sideways.
+function coerceScenarioOp(op, label, issues) {
+    if (!op || typeof op !== 'object') return null;
+    const kind = toText(op.op).trim().toLowerCase();
+    if (kind === 'add') {
+        if (!op.tx || typeof op.tx !== 'object') return null;
+        const tx = coerceTransaction(op.tx, label + ' added item', issues);
+        return tx.name ? { op: 'add', tx } : null;
+    }
+    if (kind === 'remove') {
+        const txId = toText(op.txId).trim();
+        return txId ? { op: 'remove', txId } : null;
+    }
+    if (kind !== 'modify') return null;
+    const txId = toText(op.txId).trim();
+    const source = (op.patch && typeof op.patch === 'object') ? op.patch : {};
+    const patch = {};
+    SCENARIO_PATCH_COLUMNS.forEach(field => {
+        if (source[field] === undefined || source[field] === '') return;
+        if (field === 'amount') patch.amount = toNum(source.amount, 0);
+        else if (field === 'escalation') patch.escalation = clampEscalation(source.escalation);
+        else if (field === 'paused') patch.paused = toBool(source.paused);
+        else if (source[field] === null) patch[field] = null;
+        else patch[field] = normalizeDate(source[field], label + ' ' + field, issues) || null;
+    });
+    return (txId && Object.keys(patch).length) ? { op: 'modify', txId, patch } : null;
+}
+
+function coerceScenario(r, index, issues) {
+    const name = toText(r.name).trim() || `Scenario ${index + 1}`;
+    const label = `Scenario "${name}"`;
+    const declared = Array.isArray(r.ops) ? r.ops : [];
+    const ops = declared.map(op => coerceScenarioOp(op, label, issues)).filter(Boolean);
+    // A change the app cannot understand is dropped, but a scenario that quietly
+    // came back smaller than it left is worse than one that says so.
+    if (ops.length < declared.length) {
+        issues.push(`${label}: ${declared.length - ops.length} change(s) could not be read and were left out.`);
+    }
+    return { id: r.id ? toText(r.id) : uid('scn'), name, ops };
 }
 
 function ensureUncategorised(target) {
@@ -1985,7 +2324,13 @@ function coerceState(raw, issues) {
     const source = (raw && typeof raw === 'object') ? raw : {};
     const settings = (source.settings && typeof source.settings === 'object') ? source.settings : {};
     out.schemaVersion = isFinite(Number(source.schemaVersion)) ? Number(source.schemaVersion) : 1;
-    out.settings.currency = toText(settings.currency || 'USD').trim().toUpperCase().slice(0, 8) || 'USD';
+    // A code Intl does not know would make every formatter throw, so it is
+    // refused here rather than stored and swallowed at each call site.
+    const declaredCurrency = toText(settings.currency || '').trim().toUpperCase().slice(0, 8);
+    out.settings.currency = normalizeCurrency(declaredCurrency);
+    if (declaredCurrency && declaredCurrency !== out.settings.currency) {
+        issues.push(`"${declaredCurrency}" is not a currency code this app can format, so amounts are shown in ${out.settings.currency}.`);
+    }
     out.settings.forecastHorizon = toText(settings.forecastHorizon || '12').trim() || '12';
     out.settings.chartHorizons = {};
     if (settings.chartHorizons && typeof settings.chartHorizons === 'object') {
@@ -1995,6 +2340,8 @@ function coerceState(raw, issues) {
         });
     }
     out.settings.lastExportAt = typeof settings.lastExportAt === 'string' ? settings.lastExportAt : null;
+    // migrate() drops this again if it points at a scenario the file did not carry.
+    out.settings.activeScenarioId = settings.activeScenarioId ? toText(settings.activeScenarioId) : null;
 
     const rows = (value) => (Array.isArray(value) ? value : []).filter(r => r && typeof r === 'object');
     const dropped = { accounts: 0, categories: 0, transactions: 0 };
@@ -2006,6 +2353,12 @@ function coerceState(raw, issues) {
     if (out.categories.length === 0) out.categories = structuredClone(DEFAULT_CATEGORIES);
     out.transactions = rows(source.transactions).map((r, i) => coerceTransaction(r, `Transaction row ${i + 1}`, issues))
         .filter(t => { if (t.name) return true; dropped.transactions++; return false; });
+
+    // Recorded history and what-ifs travel with the plan. Dropping them here is
+    // what used to make an import quietly destroy everything the v5 panels hold.
+    out.actuals   = rows(source.actuals).map(coerceActual).filter(Boolean);
+    out.checkins  = rows(source.checkins).map(coerceCheckin).filter(Boolean);
+    out.scenarios = rows(source.scenarios).map((r, i) => coerceScenario(r, i, issues));
 
     Object.keys(dropped).forEach(key => {
         if (dropped[key]) issues.push(`${dropped[key]} ${key} row(s) had no name and were skipped.`);
@@ -2028,7 +2381,10 @@ function importExcelArrayBuffer(ab) {
     }
 
     const issues = [];
-    const raw = { settings: {}, accounts: [], categories: [], transactions: [] };
+    const raw = {
+        settings: {}, accounts: [], categories: [], transactions: [],
+        actuals: [], checkins: [], scenarios: []
+    };
 
     const settingsSheet = wb.Sheets['Settings'];
     if (settingsSheet) {
@@ -2038,9 +2394,11 @@ function importExcelArrayBuffer(ab) {
             const key = toText(k);
             // Kept so a workbook written by a newer version is refused rather than mangled.
             if (key === 'schemaVersion')        raw.schemaVersion = parseInt(v) || 1;
-            else if (key === 'currency')        raw.settings.currency = toText(v || 'USD');
+            // Passed through as written so coerceState can name the code it refused.
+            else if (key === 'currency')        raw.settings.currency = toText(v);
             else if (key === 'forecastHorizon') raw.settings.forecastHorizon = toText(v || '12');
             else if (key === 'forecastMonths')  raw.settings.forecastHorizon = String(parseInt(v) || 12);
+            else if (key === 'activeScenarioId') raw.settings.activeScenarioId = toText(v);
             else if (key === 'chartHorizons') {
                 try { Object.assign(chartHorizons, JSON.parse(toText(v))); } catch (e) { /* ignore an unreadable cell */ }
             } else if (key.indexOf('chartHorizon.') === 0) {
@@ -2061,6 +2419,12 @@ function importExcelArrayBuffer(ab) {
     if (catRows) raw.categories = catRows;
     const txRows = sheetRows('Transactions');
     if (txRows) raw.transactions = txRows;
+    const actualRows = sheetRows('Actuals');
+    if (actualRows) raw.actuals = actualRows;
+    const checkinRows = sheetRows('Checkins');
+    if (checkinRows) raw.checkins = checkinRows;
+    const scRows = sheetRows('Scenarios');
+    if (scRows) raw.scenarios = scenariosFromSheet(scRows, issues);
 
     let next;
     try {
@@ -2073,10 +2437,54 @@ function importExcelArrayBuffer(ab) {
     snapshotForUndo('the Excel import');
     writeBackup('the Excel import');
     state = next;
+    setImportIssues(issues);
     saveState();
     renderAll();
     flashWithUndo('Imported from Excel — replaced all in-browser data.');
     if (issues.length) showNotice('warning', 'Import notes: ' + issues.join(' '));
+}
+
+// The sheet holds one row per edit, so the rows are folded back into one entry
+// per scenario. Shape only — coerceState is still what validates each op.
+function scenariosFromSheet(rows, issues) {
+    const byKey = new Map();
+    const order = [];
+    rows.forEach((r, i) => {
+        const id = toText(r.scenarioId).trim();
+        const name = toText(r.scenarioName).trim();
+        if (!id && !name) return;
+        const key = id || 'row:' + i;
+        let scenario = byKey.get(key);
+        if (!scenario) {
+            scenario = { id, name, ops: [] };
+            byKey.set(key, scenario);
+            order.push(scenario);
+        }
+        if (!scenario.name && name) scenario.name = name;
+        const kind = toText(r.op).trim().toLowerCase();
+        if (!kind) return;
+        if (kind === 'add') {
+            let tx = null;
+            try { tx = JSON.parse(toText(r.tx)); } catch (e) { tx = null; }
+            if (!tx || typeof tx !== 'object') {
+                issues.push(`Scenario "${scenario.name || scenario.id}": an added item could not be read and was left out.`);
+                return;
+            }
+            scenario.ops.push({ op: 'add', tx });
+            return;
+        }
+        if (kind === 'remove') {
+            scenario.ops.push({ op: 'remove', txId: toText(r.txId) });
+            return;
+        }
+        const patch = {};
+        SCENARIO_PATCH_COLUMNS.forEach(field => {
+            if (r[field] === undefined || r[field] === '') return;
+            patch[field] = r[field];
+        });
+        scenario.ops.push({ op: kind, txId: toText(r.txId), patch });
+    });
+    return order;
 }
 
 /* Dates from a spreadsheet are only trusted when their order is unambiguous:
@@ -2168,6 +2576,7 @@ function importJsonText(text) {
     snapshotForUndo('the JSON import');
     writeBackup('the JSON import');
     state = next;
+    setImportIssues(issues);
     saveState();
     renderAll();
     flashWithUndo('Imported JSON — replaced all in-browser data.');
@@ -2175,6 +2584,22 @@ function importJsonText(text) {
 }
 
 /* ───── Currency / horizon ───── */
+
+// The picker lists a handful of common codes, but a file may legitimately carry
+// any code the formatter accepts — showing a blank selection for one of those
+// would read as "no currency set" when every figure on screen has one.
+function syncCurrencySelect() {
+    const sel = el('currencySelect');
+    if (!sel) return;
+    const code = normalizeCurrency(state.settings.currency);
+    if (!Array.prototype.some.call(sel.options, o => o.value === code)) {
+        const option = document.createElement('option');
+        option.value = code;
+        option.textContent = code;
+        sel.appendChild(option);
+    }
+    sel.value = code;
+}
 
 on('currencySelect', 'change', e => {
     state.settings.currency = e.target.value;
@@ -2190,6 +2615,37 @@ on('horizonSelect', 'change', e => {
 
 /* ───── Modal helpers ───── */
 
+// aria-modal tells assistive technology the rest of the page is inert; without a
+// real trap, a Tab key disagrees with it and walks out into the page behind.
+const MODAL_FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),' +
+    'select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+let modalReturnFocus = null;
+let modalScrollLock = null;
+let modalKeyHandler = null;
+
+function modalFocusables(modal) {
+    return Array.prototype.filter.call(modal.querySelectorAll(MODAL_FOCUSABLE),
+        node => node.offsetWidth > 0 || node.offsetHeight > 0 || node === document.activeElement);
+}
+
+function trapModalFocus(modal) {
+    modalKeyHandler = e => {
+        if (e.key !== 'Tab' || !modal.isConnected) return;
+        const list = modalFocusables(modal);
+        if (!list.length) { e.preventDefault(); modal.focus(); return; }
+        const first = list[0];
+        const last = list[list.length - 1];
+        const active = document.activeElement;
+        if (e.shiftKey && (active === first || active === modal || !modal.contains(active))) {
+            e.preventDefault(); last.focus();
+        } else if (!e.shiftKey && (active === last || !modal.contains(active))) {
+            e.preventDefault(); first.focus();
+        }
+    };
+    document.addEventListener('keydown', modalKeyHandler, true);
+}
+
 // Title and body are always plain text; only the app's own controls are markup.
 function confirmModal(title, body, onConfirm, opts = {}) {
     let mount = el('modalMount');
@@ -2198,12 +2654,14 @@ function confirmModal(title, body, onConfirm, opts = {}) {
         mount.id = 'modalMount';
         document.body.appendChild(mount);
     }
-    mount.innerHTML = '';
+    closeModal();
+    modalReturnFocus = document.activeElement;
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     const modal = document.createElement('div');
     modal.className = 'modal';
+    modal.tabIndex = -1;
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
     modal.setAttribute('aria-labelledby', 'modalTitle');
@@ -2234,6 +2692,29 @@ function confirmModal(title, body, onConfirm, opts = {}) {
         modal.appendChild(wrap);
     }
 
+    // A reference list rather than a question: keys on the left, what they do on
+    // the right, all of it plain text.
+    if (opts.items && opts.items.length) {
+        const list = document.createElement('dl');
+        list.style.cssText = 'margin:0 0 16px;display:grid;grid-template-columns:auto 1fr;gap:8px 14px;align-items:baseline;';
+        opts.items.forEach(item => {
+            const term = document.createElement('dt');
+            term.style.cssText = 'margin:0;';
+            const key = document.createElement('kbd');
+            key.textContent = item.keys;
+            key.style.cssText = 'display:inline-block;min-width:22px;padding:2px 8px;text-align:center;border-radius:6px;' +
+                'font-family:' + cssVar('--font-mono', 'monospace') + ';font-size:12px;' +
+                'background:' + cssVar('--bg-chrome', '#0c0f26') +
+                ';border:1px solid ' + cssVar('--border', 'rgba(255,255,255,0.12)') + ';';
+            term.appendChild(key);
+            const detail = document.createElement('dd');
+            detail.style.cssText = 'margin:0;';
+            detail.textContent = item.description;
+            list.append(term, detail);
+        });
+        modal.appendChild(list);
+    }
+
     const actions = document.createElement('div');
     actions.className = 'form-actions';
     const cancel = document.createElement('button');
@@ -2245,18 +2726,26 @@ function confirmModal(title, body, onConfirm, opts = {}) {
     const ok = document.createElement('button');
     ok.type = 'button';
     ok.id = 'mOk';
-    ok.className = 'danger';
+    ok.className = opts.confirmClass || 'danger';
     ok.textContent = opts.confirmLabel || 'Confirm';
     ok.onclick = () => {
         const choice = select ? select.value : undefined;
         closeModal();
-        onConfirm(choice);
+        if (typeof onConfirm === 'function') onConfirm(choice);
     };
-    actions.append(cancel, ok);
+    // A dialog that only tells you something has nothing to cancel out of.
+    if (opts.dismissOnly) actions.append(ok);
+    else actions.append(cancel, ok);
     modal.appendChild(actions);
     overlay.appendChild(modal);
     overlay.onclick = e => { if (e.target === overlay) closeModal(); };
     mount.appendChild(overlay);
+
+    // The page behind must not scroll under the dialog; the previous value is
+    // kept rather than assumed, since something else may already own it.
+    modalScrollLock = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    trapModalFocus(modal);
     ok.focus();
 }
 
@@ -2264,6 +2753,21 @@ function closeModal() {
     const mount = el('modalMount');
     if (!mount || !mount.firstChild) return false;
     mount.innerHTML = '';
+    if (modalKeyHandler) {
+        document.removeEventListener('keydown', modalKeyHandler, true);
+        modalKeyHandler = null;
+    }
+    if (modalScrollLock !== null) {
+        document.body.style.overflow = modalScrollLock;
+        modalScrollLock = null;
+    }
+    const returnTo = modalReturnFocus;
+    modalReturnFocus = null;
+    // A re-render may have replaced whatever opened the dialog, in which case
+    // there is nothing to go back to and the browser's own default is better.
+    if (returnTo && returnTo.isConnected && typeof returnTo.focus === 'function') {
+        try { returnTo.focus(); } catch (e) { /* the trigger may be gone */ }
+    }
     return true;
 }
 
@@ -2375,16 +2879,67 @@ on('dismissIntroBtn', 'click', () => {
 
 /* ───── Keyboard ───── */
 
+// Single keys, so every one of them is off while the caret is in a field —
+// otherwise "e" could not be typed into a transaction name.
+function isTypingTarget(node) {
+    if (!node || node.nodeType !== 1) return false;
+    if (node.isContentEditable) return true;
+    return node.tagName === 'INPUT' || node.tagName === 'TEXTAREA' || node.tagName === 'SELECT';
+}
+
+function modalIsOpen() {
+    const mount = el('modalMount');
+    return !!(mount && mount.firstChild);
+}
+
+const SHORTCUTS = [
+    { keys: '/', description: 'Jump to the transaction search box' },
+    { keys: 'e', description: 'Export an Excel workbook' },
+    { keys: 'j', description: 'Export a JSON file' },
+    { keys: '?', description: 'Show this list' },
+    { keys: 'Esc', description: 'Close a dialog, or cancel the edit in progress' }
+];
+
+function showShortcutHelp() {
+    confirmModal('Keyboard shortcuts',
+        'These work anywhere on the page except while you are typing in a field.',
+        null,
+        { items: SHORTCUTS, dismissOnly: true, confirmLabel: 'Close', confirmClass: 'primary' });
+}
+
+// The search box lives inside a section that can be collapsed, and focusing a
+// hidden input does nothing at all.
+function focusTransactionSearch() {
+    const body = el('txBody');
+    const toggle = el('txToggle');
+    if (body && body.classList.contains('hidden') && toggle) toggle.click();
+    const search = el('txSearch');
+    if (!search) return;
+    scrollSectionIntoView('section-transactions');
+    search.focus();
+    search.select();
+}
+
 document.addEventListener('keydown', e => {
-    if (e.key !== 'Escape') return;
-    if (closeModal()) return;
-    if (editingTxId) { cancelTxEdit(); return; }
-    if (editingAcctId) { cancelAccountEdit(); return; }
-    if (editingCatId) { cancelCategoryEdit(); }
+    if (e.key === 'Escape') {
+        if (closeModal()) return;
+        if (editingTxId) { cancelTxEdit(); return; }
+        if (editingAcctId) { cancelAccountEdit(); return; }
+        if (editingCatId) { cancelCategoryEdit(); }
+        return;
+    }
+    // A modifier means the key belongs to the browser or the OS, not to us.
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (isTypingTarget(e.target) || modalIsOpen()) return;
+    const key = e.key.toLowerCase();
+    if (e.key === '/') { e.preventDefault(); focusTransactionSearch(); }
+    else if (e.key === '?') { e.preventDefault(); showShortcutHelp(); }
+    else if (key === 'e') { e.preventDefault(); exportExcel(); }
+    else if (key === 'j') { e.preventDefault(); exportJson(); }
 });
 
 function renderAll() {
-    setVal('currencySelect', state.settings.currency);
+    syncCurrencySelect();
     setVal('horizonSelect', state.settings.forecastHorizon);
     refreshSelects();
     refreshChartHorizonSelects();

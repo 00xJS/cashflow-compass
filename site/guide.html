@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="The Cashflow Compass user guide — a 20-part walkthrough of accounts, categories, recurring transactions, the forecast grid, bank-file imports, goals, scenarios and backups.">
+<!-- Referrer-Policy also ships as a Netlify header; this meta covers file:// and self-hosted use. -->
+<meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0a0d1c">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧭</text></svg>">
 <title>Getting Started — Cashflow Compass</title>
@@ -22,7 +25,8 @@
     /* text */
     --text: #e8eaf6;
     --muted: #9ba1c5;
-    --faint: #6c7299;
+    /* Lightened until the 10px mono micro-labels clear WCAG AA on every surface they sit on. */
+    --faint: #8087ad;
 
     /* accents */
     --accent: #ff9a44;
@@ -47,6 +51,9 @@
     --radius-card: 12px;
     --radius-control: 8px;
     --radius-pill: 999px;
+
+    /* Rendered height of the sticky nav; anchor targets have to clear it. */
+    --nav-h: 62px;
 }
 
 /* ── Base ── */
@@ -97,6 +104,26 @@ code {
     font-size: 13px;
     font-family: var(--font-mono);
 }
+
+/* ── Skip link ── */
+.skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 200;
+    padding: 10px 16px;
+    background: var(--accent);
+    color: var(--btn-ink);
+    font-weight: 700;
+    font-size: 13.5px;
+    border-radius: 0 0 var(--radius-control) 0;
+    text-decoration: none;
+}
+.skip-link:focus {
+    left: 0;
+    color: var(--btn-ink);
+}
+main:focus { outline: none; }
 
 /* ── Layout ── */
 .page-wrap {
@@ -198,6 +225,8 @@ a.kicker:hover { color: var(--accent); }
 /* ── Guide sections ── */
 .guide-section {
     margin-bottom: 56px;
+    /* Every contents link lands on one of these, and the sticky nav would otherwise cover it. */
+    scroll-margin-top: calc(var(--nav-h) + 14px);
 }
 .guide-section h2 {
     font-size: 1.45rem;
@@ -457,9 +486,94 @@ a.kicker:hover { color: var(--accent); }
     .guide-hero h1 { font-size: 1.5rem; }
     .freq-grid, .chart-grid, .tips-grid { grid-template-columns: 1fr; }
 }
+/* The nav title wraps to a second line around 470px and a third around 335px,
+   so the bar the anchors have to clear grows. The thresholds sit slightly wide
+   of the measured ones because the fallback font differs by platform, and
+   landing a little low is only whitespace where landing high hides the heading. */
+@media (max-width: 480px) {
+    :root { --nav-h: 78px; }
+}
+@media (max-width: 360px) {
+    :root { --nav-h: 102px; }
+}
+
+/* ── Print ── */
+@media print {
+    /* Relight every token for paper; the semantic hues are re-pointed at ink
+       because they are unreadable on white and meaningless on a mono printer. */
+    :root {
+        color-scheme: light;
+        --bg: #ffffff;
+        --bg-raised: #ffffff;
+        --card: #ffffff;
+        --card-chrome: #f0f0f0;
+        --border: #b4b4b4;
+        --border-hover: #b4b4b4;
+        --text: #111111;
+        --muted: #333333;
+        --faint: #444444;
+        --accent: #111111;
+        --accent-deep: #111111;
+        --magenta: #111111;
+        --info: #111111;
+        --live: #111111;
+        --warn: #111111;
+        --down: #111111;
+        --shadow: none;
+    }
+    body {
+        background: #ffffff;
+        color: #111111;
+        font-size: 11pt;
+        line-height: 1.45;
+    }
+    body::before { display: none; }
+
+    /* Places to press things rather than things to read on paper. */
+    .skip-link,
+    .guide-nav { display: none !important; }
+
+    .page-wrap { max-width: none; padding: 0; }
+    .guide-hero { padding: 0 0 18px; margin-bottom: 24px; }
+    .guide-foot { margin-top: 24px; }
+
+    a { color: #111111; text-decoration: none; }
+    code { background: #f0f0f0; }
+
+    /* Filled accent circles would print as solid blocks of toner. */
+    .section-num,
+    .step-num,
+    .ins-num {
+        background: #ffffff;
+        color: #111111;
+        border: 1px solid #111111;
+    }
+
+    /* Rounded clipping stops a long table flowing onto a second sheet. */
+    .guide-table { overflow: visible; }
+    .callout.tip,
+    .callout.note,
+    .callout.warn { background: transparent; }
+
+    .guide-section { margin-bottom: 26px; }
+    .toc { margin-bottom: 26px; padding: 14px 18px; }
+
+    /* Never strand a heading, a step or a table row at the foot of a page. */
+    h2, h3, h4 { break-after: avoid; page-break-after: avoid; }
+    .guide-section h2 { break-inside: avoid; page-break-inside: avoid; }
+    .step-card,
+    .freq-card,
+    .insight-row,
+    .chart-desc-card,
+    .tip-card,
+    .callout,
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    thead { display: table-header-group; }
+}
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 
 <!-- Nav bar -->
 <nav class="guide-nav">
@@ -470,6 +584,8 @@ a.kicker:hover { color: var(--accent); }
 </nav>
 
 <div class="page-wrap">
+
+<main id="main" tabindex="-1">
 
 <!-- Hero -->
 <div class="guide-hero">
@@ -1285,7 +1401,7 @@ a.kicker:hover { color: var(--accent); }
             <span class="step-num">2</span>
             <div class="step-body">
                 <h4>Fund it with an ordinary transaction</h4>
-                <p>A $250 monthly transfer from checking to savings, filed under that goal category. Nothing special — it's a transaction like any other, and it appears in the forecast grid in the Goal group.</p>
+                <p>A $250 monthly transfer from checking to savings, filed under that goal category. Nothing special — it's a transaction like any other. Money moved into a goal category counts toward the goal, so the progress figure, the run-rate and the ETA all start moving. What you won't see is a new row in the forecast grid: a transfer changes <em>where</em> your money sits, not how much of it there is, so it adds nothing to a monthly income or expense total.</p>
             </div>
         </div>
         <div class="step-card">
@@ -1308,7 +1424,7 @@ a.kicker:hover { color: var(--accent); }
 
     <div class="callout tip">
         <div class="callout-label">Tip — Sinking funds turn lumpy bills into flat ones</div>
-        Any annual bill can become a sinking fund: divide it by twelve, set that as a monthly transfer into a goal category, and set the target to the bill. Your <a href="#insights">Tightest Week</a> and <a href="#calendar">bills calendar</a> both get calmer, because the money is already set aside when the bill lands.
+        Any annual bill can become a sinking fund: divide it by twelve, set that as a monthly transfer into a goal category, and set the target to the bill. The goal's progress and ETA track the pot filling up month by month, and your <a href="#insights">Tightest Week</a> and <a href="#calendar">bills calendar</a> both get calmer, because the money is already set aside when the bill lands.
     </div>
 
     <div class="callout note">
@@ -1502,7 +1618,7 @@ a.kicker:hover { color: var(--accent); }
     <p>The horizon dropdown next to it sets the length of the forecast for the grid and every chart at once. <strong>End of Year</strong> is the months remaining in the current calendar year, which shrinks as the year goes on — useful in January, less so in December. Individual charts can override it; see the <a href="#charts">Charts</a> section.</p>
 
     <h3>Collapsible sections</h3>
-    <p>Categories, Transactions, Forecast, and Visualizations each have a <strong>▾</strong> toggle in their header. Collapse the ones you're not working on — with sixty transactions and six charts on one page, collapsing Transactions to study the forecast grid makes a real difference.</p>
+    <p>Every section on the page carries a <strong>▾</strong> toggle in its header — Categories and Transactions, the forecast and the charts, balances, the calendar, check-ins, variance, debt, goals, scenarios and the workbook panel. Collapse the ones you're not working on: with sixty transactions and six charts open at once, folding Transactions away to study the forecast grid makes a real difference.</p>
 
     <h3>Where your data lives</h3>
     <p>Everything is saved to your browser's LocalStorage, automatically, a moment after each change. That storage is tied to <em>this browser on this device</em>: your budget won't follow you to a different browser, a different machine, or a private window, and clearing site data removes it. Moving between devices is what the JSON export — or <a href="#live-workbook">live workbook mode</a> — is for.</p>
@@ -1594,6 +1710,8 @@ a.kicker:hover { color: var(--accent); }
         </div>
     </div>
 </section>
+
+</main>
 
 <!-- Footer -->
 <footer class="guide-foot">
