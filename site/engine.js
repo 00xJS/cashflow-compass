@@ -535,16 +535,29 @@ function buildForecastFromState(months) {
     }
     const monthIndex = Object.fromEntries(monthList.map((m, i) => [m.key, i]));
 
-    // Balances are stated as of the newest account snapshot, so anything that fell
-    // due before it is already reflected in them. Scanning from the start of the
-    // month would replay this month's paid bills on top of a balance that includes
-    // them. The month grid still starts at the month boundary — only the scan moves.
-    let cutoff = null;
+    // A balance is stated as of a snapshot, so anything that fell due before that
+    // snapshot is already inside it and replaying it would charge the same bill
+    // twice. The snapshot belongs to the ACCOUNT, not to the plan: someone who
+    // reconciled checking this morning and last touched savings in January has two
+    // different lines in the sand, and holding both accounts to the newer one would
+    // throw away every month of the savings account's own activity in between.
+    // So each account is anchored by its own asOfDate — today when it has none —
+    // and occurrences between that anchor and the top of the month grid adjust its
+    // opening balance rather than disappearing. The month grid still starts at the
+    // month boundary: only the scan moves.
+    const cutoffByAccount = {};
+    let cutoff = null;   // the newest snapshot on file
     accounts.forEach(a => {
         const d = parseDate(a.asOfDate);
+        cutoffByAccount[a.id] = d || today;
         if (d && (!cutoff || d > cutoff)) cutoff = d;
     });
     if (!cutoff) cutoff = today;
+    // Money whose transaction names no surviving account has no balance of its own
+    // to be stated as of anything, so the unassigned bucket answers with the newest
+    // snapshot on file — the most recently reconciled date the plan can point at.
+    cutoffByAccount[UNASSIGNED_ACCOUNT] = cutoff;
+    const cutoffFor = a => (a && cutoffByAccount[a.id]) || cutoff;
 
     const acctById = {};
     accounts.forEach(a => { acctById[a.id] = a; });
@@ -571,7 +584,21 @@ function buildForecastFromState(months) {
         const cat  = catById[tx.categoryId];
         const dest = acctById[tx.accountId];
         const src  = acctById[tx.fromAccountId];
-        const occs = occurrences(tx, cutoff, horizonEnd);
+        // A transfer touches two accounts that can be stated as of two different
+        // days, so each LEG is anchored by its own account: the leg is skipped when
+        // its occurrence falls before that account's snapshot (the money is already
+        // in the stated balance) and applied otherwise. Neither side can be
+        // double-counted and neither can be dropped — money genuinely leaving an
+        // account after its snapshot and arriving in one before its own snapshot is
+        // exactly what two snapshots taken on different days describe. The scan
+        // itself opens at the earlier of the two, or the later account's anchor
+        // would swallow the earlier account's months before the legs are ever
+        // considered. For income and expense there is only ever one side, so the
+        // scan opens at the settling account's own anchor.
+        const destCut = cutoffFor(dest);
+        const srcCut  = kind === 'transfer' ? cutoffFor(src) : destCut;
+        const scanFrom = destCut < srcCut ? destCut : srcCut;
+        const occs = occurrences(tx, scanFrom, horizonEnd);
         const byMonth = new Array(months).fill(0);
         const byDay = []; // {date, amount, signed}
 
@@ -594,16 +621,21 @@ function buildForecastFromState(months) {
                 byMonth[idx] += signed;
                 byDay.push({ date: d, amount: amt, signed });
             }
-            const move = (target, delta) => { if (delta) movements.push({ date: d, idx, target, delta }); };
+            // `since` is the anchor of the account this leg settles against.
+            // Anything earlier is already inside that account's stated balance.
+            const move = (target, delta, since) => {
+                if (!delta || d < since) return;
+                movements.push({ date: d, idx, target, delta });
+            };
             if (kind === 'income') {
                 // Income into a card is a refund: it pays the debt down.
-                if (isCreditAccount(dest)) move(dest.id, -amt);
-                else move(dest ? dest.id : UNASSIGNED_ACCOUNT, amt);
+                if (isCreditAccount(dest)) move(dest.id, -amt, destCut);
+                else move(dest ? dest.id : UNASSIGNED_ACCOUNT, amt, destCut);
             } else if (kind === 'expense') {
                 // Charging a card grows the debt and leaves cash alone — the cash
                 // only moves when the card is paid (a transfer).
-                if (isCreditAccount(dest)) move(dest.id, amt);
-                else move(dest ? dest.id : UNASSIGNED_ACCOUNT, -amt);
+                if (isCreditAccount(dest)) move(dest.id, amt, destCut);
+                else move(dest ? dest.id : UNASSIGNED_ACCOUNT, -amt, destCut);
             } else {
                 const destId = dest ? dest.id : UNASSIGNED_ACCOUNT;
                 const srcId  = src  ? src.id  : UNASSIGNED_ACCOUNT;
@@ -617,9 +649,12 @@ function buildForecastFromState(months) {
                     monthlyContributionsByCategory[tx.categoryId][idx] += amt;
                 }
                 if (destId !== srcId) {
-                    if (isCreditAccount(dest)) userPaidCards.add(destId);
-                    move(destId, isCreditAccount(dest) ? -amt : amt);
-                    move(srcId,  isCreditAccount(src)  ?  amt : -amt);
+                    // Only a payment that still lands counts as one the user has
+                    // modelled: a payment already inside the card's stated balance
+                    // must not suppress the minimum on every month that follows.
+                    if (isCreditAccount(dest) && d >= destCut) userPaidCards.add(destId);
+                    move(destId, isCreditAccount(dest) ? -amt : amt, destCut);
+                    move(srcId,  isCreditAccount(src)  ?  amt : -amt, srcCut);
                 }
             }
         });
@@ -647,6 +682,12 @@ function buildForecastFromState(months) {
             // for any date from the snapshot onwards (see checkinDrift).
             startRaw: credit ? Math.abs(raw) : raw,
             start: credit ? Math.abs(raw) : raw,
+            // This account's own line in the sand — the date `startRaw` is stated
+            // as of, and the date its own scan opens at. `cutoffStated` is false
+            // when the account carries no asOfDate and today stood in for one, so
+            // the UI can tell a real snapshot from an assumed one.
+            cutoffDate: cutoffByAccount[a.id] || today,
+            cutoffStated: !!parseDate(a.asOfDate),
             dayNet: [],
             monthly: new Array(months).fill(0),
             running: new Array(months).fill(0),
@@ -665,7 +706,9 @@ function buildForecastFromState(months) {
     const unassigned = {
         id: UNASSIGNED_ACCOUNT, name: 'Unassigned', type: 'cash',
         liquid: true, credit: false, apr: 0, minPayment: 0,
-        startRaw: 0, start: 0, dayNet: [],
+        startRaw: 0, start: 0,
+        cutoffDate: cutoff, cutoffStated: false,
+        dayNet: [],
         monthly: new Array(months).fill(0), running: new Array(months).fill(0),
         daysInRed: 0, lowest: { date: new Date(horizonStart), balance: 0 },
         autoMinPayment: false, autoMinPaymentTotal: 0,
@@ -841,6 +884,10 @@ function buildForecastFromState(months) {
         firstNegativeDate, tightestWeek,
         debtSchedule: payoffSchedule(accounts, 0, 'avalanche'),
         orphans, mismatches,
+        // `cutoffDate` is the newest snapshot on file, and the anchor used for
+        // money that names no surviving account. Each account carries its own
+        // anchor on its accountsList/byAccount entry; that is the one to read
+        // when the question is about a particular balance.
         horizonStart, horizonEnd, cutoffDate: cutoff, months
     };
 }

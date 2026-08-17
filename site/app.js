@@ -25,6 +25,14 @@ function setVal(id, value) { const node = el(id); if (node) node.value = value; 
 function setHidden(id, hidden) { const node = el(id); if (node) node.classList.toggle('hidden', hidden); }
 function on(id, event, handler) { const node = el(id); if (node) node.addEventListener(event, handler); }
 
+// Assigning a value a <select> does not offer leaves the previous selection
+// standing, which turns a read into a silent edit. Ask first.
+function selectHasOption(id, value) {
+    const node = el(id);
+    if (!node || !node.options) return false;
+    return Array.prototype.some.call(node.options, o => o.value === value);
+}
+
 // An explicit behavior beats the stylesheet's scroll-behavior under CSSOM-View,
 // so asking for 'smooth' here would animate for someone who asked for no motion.
 function prefersReducedMotion() {
@@ -732,7 +740,13 @@ function editCategory(id) {
     if (!c) return;
     editingCatId = id;
     setVal('catName', c.name);
-    setVal('catKind', c.kind);
+    // A stored kind the form cannot show is left alone rather than replaced by
+    // whatever the control happens to be displaying.
+    if (selectHasOption('catKind', c.kind)) {
+        setVal('catKind', c.kind);
+    } else {
+        showNotice('warning', `${c.name} is filed as ${KIND_LABELS[c.kind] || c.kind}, a kind this form does not offer. Its kind is left as it is when you save.`);
+    }
     setVal('catColor', safeColor(c.color));
     setText('catSubmitBtn', 'Update Category');
     setHidden('catCancelBtn', false);
@@ -773,14 +787,17 @@ on('categoryForm', 'submit', e => {
         showFormErrors([{ input: el('catName'), message: 'Give the category a name — spaces alone will not do.' }]);
         return;
     }
+    const editing = editingCatId ? state.categories.find(x => x.id === editingCatId) : null;
+    // If the select cannot represent this category's kind then whatever it shows
+    // was never a choice about this category, so the stored kind stands.
+    const keepKind = editing && !selectHasOption('catKind', editing.kind);
     const data = {
         name,
-        kind: getVal('catKind', 'variable'),
+        kind: keepKind ? editing.kind : getVal('catKind', 'variable'),
         color: safeColor(getVal('catColor'), '#ff9a44')
     };
     if (editingCatId) {
-        const c = state.categories.find(x => x.id === editingCatId);
-        if (c) Object.assign(c, data);
+        if (editing) Object.assign(editing, data);
         editingCatId = null;
     } else {
         state.categories.push({ id: uid('cat'), ...data });
@@ -1119,11 +1136,16 @@ on('txForm', 'submit', e => {
         return;
     }
     const name = getVal('txName').trim();
-    const amount = parseFloat(getVal('txAmount')) || 0;
+    const amount = parseFloat(getVal('txAmount'));
     const startDate = getVal('txStart');
     const endDate = getVal('txEnd') || null;
     const errors = [];
     if (!name) errors.push({ input: el('txName'), message: 'Give the transaction a name — spaces alone will not do.' });
+    // The markup asks for min="0.01", but the rule belongs here too: a figure
+    // that reaches this handler by any other route has to meet it as well.
+    if (!isFinite(amount) || amount <= 0) {
+        errors.push({ input: el('txAmount'), message: 'Give the transaction an amount above zero — whether it adds or subtracts is decided by the kind, so enter it as a positive figure.' });
+    }
     if (!startDate) errors.push({ input: el('txStart'), message: 'A start date is needed to place this on the calendar.' });
     if (startDate && endDate && endDate < startDate) {
         errors.push({ input: el('txEnd'), message: 'The end date is before the start date — nothing would ever occur.' });
@@ -1244,6 +1266,31 @@ function setImportIssues(issues) {
     lastImportIssues = Array.isArray(issues) ? issues.slice() : [];
 }
 
+// A row saved with no amount is not an error — it may be a placeholder, or it
+// may predate the checks — but it is invisible in the forecast either way, so
+// it is named here rather than left to be discovered.
+function savedTransactions() {
+    return (state && Array.isArray(state.transactions)) ? state.transactions : [];
+}
+
+function rowLabel(t) {
+    return String((t && t.name) || '').trim() || 'An unnamed item';
+}
+
+function zeroAmountNotes() {
+    return savedTransactions()
+        .filter(t => t && toNum(t.amount, 0) === 0)
+        .map(t => `${rowLabel(t)} is set to zero, so it sits in the plan without moving the forecast.`);
+}
+
+// A negative can no longer be imported, but one saved before that was true is
+// still read as its magnitude by the forecast, so the two disagree on screen.
+function signedAmountNotes() {
+    return savedTransactions()
+        .filter(t => t && toNum(t.amount, 0) < 0)
+        .map(t => `${rowLabel(t)} is stored as ${toNum(t.amount, 0)}, while the forecast uses ${Math.abs(toNum(t.amount, 0))} and takes its direction from the kind. Re-enter it as a positive figure to make the two agree.`);
+}
+
 // The strip is emptied when there is nothing to say — the stylesheet hides it
 // with :empty, so leaving stale nodes behind would leave an empty box on screen.
 function renderForecastWarnings(forecast) {
@@ -1253,6 +1300,8 @@ function renderForecastWarnings(forecast) {
     const groups = [
         { heading: 'Pointing at something that no longer exists', items: issueList(forecast.orphans) },
         { heading: 'Filed against a category that contradicts them', items: issueList(forecast.mismatches) },
+        { heading: 'Carrying no amount', items: zeroAmountNotes() },
+        { heading: 'Stored with a negative amount', items: signedAmountNotes() },
         { heading: 'Noted while reading the imported file', items: lastImportIssues.slice(), dismissible: true }
     ].filter(g => g.items.length);
     if (!groups.length) return;
@@ -2176,7 +2225,16 @@ function coerceTransaction(r, label, issues) {
         issues.push(`${label}: the end date ${endDate} is before the start date ${startDate} — the end date was dropped.`);
         endDate = null;
     }
-    const amount = toNum(r.amount, 0);
+    const signedAmount = toNum(r.amount, 0);
+    // The forecast reads the magnitude and takes the direction from the row's
+    // kind, so a signed figure would be shown and exported as one thing while
+    // being counted as another — for as long as the row survived. Store the
+    // magnitude, which is what the forecast was going to use regardless.
+    const amount = Math.abs(signedAmount);
+    if (signedAmount < 0) {
+        const who = toText(r.name).trim();
+        issues.push(`${label}${who ? ` (${who})` : ''}: the amount was ${signedAmount}, and a negative would read as one figure while counting as another — it is stored as ${amount}, with income or expense still decided by the row's kind.`);
+    }
     // Kept rather than dropped — the row may be a placeholder someone means to
     // fill in — but a silent zero is a forecast line that can never move.
     if (amount === 0) {
@@ -2255,7 +2313,9 @@ function coerceScenarioOp(op, label, issues) {
     const patch = {};
     SCENARIO_PATCH_COLUMNS.forEach(field => {
         if (source[field] === undefined || source[field] === '') return;
-        if (field === 'amount') patch.amount = toNum(source.amount, 0);
+        // Magnitude here for the same reason as on a transaction: a what-if that
+        // patched in a signed amount would be read one way and counted another.
+        if (field === 'amount') patch.amount = Math.abs(toNum(source.amount, 0));
         else if (field === 'escalation') patch.escalation = clampEscalation(source.escalation);
         else if (field === 'paused') patch.paused = toBool(source.paused);
         else if (source[field] === null) patch[field] = null;

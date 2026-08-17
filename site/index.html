@@ -188,11 +188,31 @@ h1 {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    align-items: center;
+    /* Bottom edges line up, so the labelled selects sit on the button row's baseline. */
+    align-items: flex-end;
 }
 .header-controls select,
 .header-controls button {
     height: 36px;
+}
+/* Currency and horizon read as one labelled pair. The global select { width: 100% }
+   would otherwise stretch each of them across the whole control row and stack them. */
+.header-selects {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px;
+    min-width: 0;
+}
+.header-field {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.header-field select {
+    width: auto;
+    min-width: 112px;
+    max-width: 100%;
 }
 
 /* Status / error strips: must collapse completely while app.js leaves them empty. */
@@ -308,7 +328,12 @@ section.card > h2 {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    /* The summary chip beside a title can be longer than the card on a tablet,
+       and a flex item will not shrink past its content on its own. */
+    flex-wrap: wrap;
+    gap: 8px;
 }
+section.card > h2 > span:first-child { min-width: 0; }
 .section-meta {
     display: inline-flex;
     align-items: center;
@@ -323,7 +348,9 @@ section.card > h2 {
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--muted);
-    white-space: nowrap;
+    /* Held on one line this runs wider than a 768px viewport and drags the whole
+       page sideways; it fits on a desktop either way, so let it wrap instead. */
+    white-space: normal;
 }
 .section-meta:empty { display: none; }
 
@@ -700,6 +727,10 @@ footer.app-foot a:hover { color: var(--accent-deep); text-decoration: underline;
     header.app-head { flex-direction: column; align-items: flex-start; }
     h1 { font-size: 1.4rem; }
     .header-controls { width: 100%; justify-content: flex-start; }
+    /* Still side by side on a phone, now sharing the row evenly. */
+    .header-selects { width: 100%; }
+    .header-field { flex: 1 1 0; }
+    .header-field select { width: 100%; min-width: 0; }
     .charts-grid { grid-template-columns: minmax(0, 1fr); }
     .chart-card { padding: 12px 12px; }
     .chart-card canvas { min-height: 210px; max-height: 260px; }
@@ -900,23 +931,29 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
         <p class="tagline">Navigate your cashflow — up to 36 months out <span style="white-space:nowrap">&nbsp;|&nbsp;<a href="guide.html" class="guide-link">How to get Started →</a></span></p>
     </div>
     <div class="header-controls">
-        <label class="visually-hidden" for="currencySelect">Currency</label>
-        <select id="currencySelect" title="Currency">
-            <option value="USD">$ USD</option>
-            <option value="EUR">€ EUR</option>
-            <option value="GBP">£ GBP</option>
-            <option value="CAD">$ CAD</option>
-            <option value="AUD">$ AUD</option>
-            <option value="JPY">¥ JPY</option>
-        </select>
-        <label class="visually-hidden" for="horizonSelect">Forecast horizon</label>
-        <select id="horizonSelect" title="Forecast horizon">
-            <option value="eoy">End of Year</option>
-            <option value="12">12 months</option>
-            <option value="18">18 months</option>
-            <option value="24">24 months</option>
-            <option value="36">36 months</option>
-        </select>
+        <div class="header-selects">
+            <div class="header-field">
+                <label for="currencySelect">Currency</label>
+                <select id="currencySelect" title="Currency">
+                    <option value="USD">$ USD</option>
+                    <option value="EUR">€ EUR</option>
+                    <option value="GBP">£ GBP</option>
+                    <option value="CAD">$ CAD</option>
+                    <option value="AUD">$ AUD</option>
+                    <option value="JPY">¥ JPY</option>
+                </select>
+            </div>
+            <div class="header-field">
+                <label for="horizonSelect">Forecast horizon</label>
+                <select id="horizonSelect" title="Forecast horizon">
+                    <option value="eoy">End of Year</option>
+                    <option value="12">12 months</option>
+                    <option value="18">18 months</option>
+                    <option value="24">24 months</option>
+                    <option value="36">36 months</option>
+                </select>
+            </div>
+        </div>
         <button id="exportXlsxBtn" class="primary">⬇ Excel</button>
         <button id="importXlsxBtn">⬆ Excel</button>
         <!-- Mount for the bank-file import control. -->
@@ -1046,6 +1083,7 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
                     <option value="savings">Savings</option>
                     <option value="debt">Debt Payment</option>
                     <option value="tax">Tax</option>
+                    <option value="goal">Goal</option>
                 </select>
             </div>
             <div>

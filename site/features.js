@@ -808,6 +808,14 @@ function v5CheckinReadings(checkins, accountId) {
 // forecast starts from cannot be projected to, so comparing the two would invent
 // a gap out of the order the numbers were entered in.
 function v5CheckinBaseline(forecast, accountId) {
+    // Each account is anchored by its own snapshot, so the baseline is that
+    // account's own scan date. Reaching for the newest date on file would
+    // overshoot every account whose snapshot is older than the newest one, and
+    // invent a gap for the account that has drifted longest.
+    const entry = forecast && forecast.byAccount ? forecast.byAccount[accountId] : null;
+    const own = entry ? v5ToDate(entry.cutoffDate) : null;
+    if (own) return own;
+
     const account = (Array.isArray(state.accounts) ? state.accounts : []).find(a => a.id === accountId);
     const stated = account ? v5ToDate(account.asOfDate) : null;
     const scanned = v5ToDate(forecast.cutoffDate);
@@ -1081,6 +1089,12 @@ function renderAccountsPanel(forecast) {
     }
 
     const last = forecast.monthList.length - 1;
+    // Each account counts forward from its own snapshot, so a single date only
+    // describes the table while every account agrees. When they diverge, the
+    // row has to carry its own date or every figure but the newest is misdated.
+    const anchors = list.map(a => v5Long(a.cutoffDate)).filter(Boolean);
+    const sharedAnchor = anchors.length && anchors.every(d => d === anchors[0]) ? anchors[0] : null;
+
     const rows = list.map(a => {
         const end = v5Num(a.running ? a.running[last] : a.start, v5Num(a.start, 0));
         const start = v5Num(a.start, 0);
@@ -1104,7 +1118,11 @@ function renderAccountsPanel(forecast) {
         return `<tr>
             <td>${v5esc(a.name || '(unnamed)')} ${flag} ${autoChip}</td>
             <td><span class="tag">${v5esc(a.type || 'checking')}</span> ${trailing}</td>
-            <td class="num">${v5esc(v5Money(start))}${a.credit ? ' <span class="muted-text">owed</span>' : ''}</td>
+            <td class="num">${v5esc(v5Money(start))}${a.credit ? ' <span class="muted-text">owed</span>' : ''}${
+                sharedAnchor || !v5Long(a.cutoffDate)
+                    ? ''
+                    : `<span class="muted-text">${v5esc('as of ' + v5Long(a.cutoffDate) + (a.cutoffStated ? '' : ' (assumed)'))}</span>`
+            }</td>
             <td class="num ${!a.credit && end < 0 ? 'v5-neg' : ''}">${v5esc(v5Money(end))}</td>
             <td class="num ${a.credit ? '' : (lowestBalance < 0 ? 'v5-neg' : '')}">${a.credit ? '<span class="muted-text">n/a</span>' : v5esc(v5Money(lowestBalance))}
                 ${a.credit ? '' : `<span class="muted-text">${v5esc(v5Long(lowest.date))}</span>`}</td>
@@ -1130,7 +1148,13 @@ function renderAccountsPanel(forecast) {
             }).join(' ') + ' Enter a transfer that pays the card and the plan takes over instead.')}</p>`
         : '';
 
-    const asOf = v5Long(forecast.cutoffDate);
+    // Each account counts forward from its own snapshot, so a single date only
+    // describes the table while every account agrees. When they diverge, saying
+    // "the newest date on file" would misdate every row that is not the newest.
+    const asOf = sharedAnchor || v5Long(forecast.cutoffDate);
+    const asOfSentence = sharedAnchor || anchors.length < 2
+        ? '"Now" is each balance as stated at the as-of date on file' + (asOf ? ' (' + asOf + ')' : '') + '.'
+        : '"Now" is each balance as stated at that account’s own as-of date, shown beside it, since your accounts were last reconciled on different days.';
     v5Paint(shell, `${note}
         <div class="table-wrap"><table>
             <thead><tr>
@@ -1140,7 +1164,7 @@ function renderAccountsPanel(forecast) {
             </tr></thead>
             <tbody>${rows}</tbody>
         </table></div>${autoNote}
-        <p class="v5-note">${v5esc('"Now" is each balance as stated at the newest as-of date on file' + (asOf ? ' (' + asOf + ')' : '') + '. Credit rows show the amount owed, so a falling number is the debt shrinking.')}</p>`);
+        <p class="v5-note">${v5esc(asOfSentence + ' Credit rows show the amount owed, so a falling number is the debt shrinking.')}</p>`);
 }
 
 /* ───── FEAT-04 · Plan vs actual ───── */

@@ -140,8 +140,16 @@
         const style = document.createElement('style');
         style.id = PORT_STYLE_ID;
         style.textContent = [
-            '.port-grid { display: grid; gap: 14px; }',
-            '.port-block { border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--bg-raised); padding: 14px 16px; }',
+            /* A block the full width of the deck is the wrong container for a
+             * paragraph held to a readable measure: the line ends mid-panel and
+             * the rest of the row stays empty. Side by side, a column lands near
+             * that measure and the prose fills it. min() lets the single column
+             * shrink below the floor on a phone rather than pushing the page
+             * sideways, and stretch keeps a block with less in it level with its
+             * neighbour instead of ending short of it. */
+            '.port-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 14px; align-items: stretch; }',
+            /* Grid items will not shrink past their own content without this. */
+            '.port-block { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--bg-raised); padding: 14px 16px; }',
             '.port-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 9px; }',
             '.port-title { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); }',
             '.port-status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--card-chrome); font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }',
@@ -152,18 +160,30 @@
             '.port-status.is-warn::before { background: var(--warn); }',
             '.port-status.is-down { color: var(--down); border-color: rgba(255, 107, 107, 0.45); }',
             '.port-status.is-down::before { background: var(--down); }',
+            /* The column decides where a line ends now; this only catches a
+             * column wide enough to be uncomfortable to read across. */
             '.port-copy { margin: 0 0 10px; max-width: 74ch; font-size: 12.5px; line-height: 1.5; color: var(--muted); }',
             '.port-copy:last-child { margin-bottom: 0; }',
             '.port-copy strong { color: var(--text); font-weight: 600; }',
             '.port-file { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--card); }',
             '.port-filename { font-family: var(--font-mono); font-size: 12.5px; color: var(--text); word-break: break-all; }',
             '.port-meta { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }',
-            '.port-note { margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--info); border-radius: var(--radius-control); background: var(--card); font-size: 12.5px; line-height: 1.5; color: var(--muted); max-width: 74ch; }',
+            /* A drawn box takes the block's width: stopping short of the file row
+             * and the buttons it sits between would read as a mistake, and its
+             * text is already inside a column near the measure. */
+            '.port-note { margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--info); border-radius: var(--radius-control); background: var(--card); font-size: 12.5px; line-height: 1.5; color: var(--muted); }',
             '.port-note strong { color: var(--text); }',
             '.port-note.warn { border-left-color: var(--warn); }',
             '.port-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }',
             '.port-actions:last-child { margin-bottom: 0; }',
-            '.port-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 8px; }',
+            '.port-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); gap: 12px; margin-bottom: 8px; }',
+            /* The page's control rule lists text, date and number inputs, so a
+             * password field is left at the browser's default width and chrome —
+             * a small pale box adrift in a cell the label spans. */
+            '.port-fields input[type="password"], .port-modal-fields input[type="password"] { width: 100%; padding: 8px 11px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-raised); color: var(--text); font-family: inherit; font-size: 14px; }',
+            // Inside a block the raised tone is the backdrop, so the field takes the card tone its neighbours use.
+            '.port-fields input[type="password"] { background: var(--card); }',
+            '.port-fields input[type="password"]:focus, .port-modal-fields input[type="password"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }',
             '.port-check { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 10px; }',
             '.port-check input { flex: none; width: 15px; height: 15px; margin-top: 2px; accent-color: var(--accent); }',
             /* The page's label rule is a mono micro-label; a sentence beside a checkbox is not. */

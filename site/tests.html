@@ -249,8 +249,8 @@ footer a { color: var(--muted); }
 <header>
     <a class="kicker" href="index.html">Observation Deck / Cashflow Compass</a>
     <h1>Engine test suite</h1>
-    <p class="tagline">367 assertions. Pure logic only — <code>engine.js</code> and <code>importers.js</code> are
-    loaded on their own, with no DOM, no <code>app.js</code>, no build step and no test library. The last two
+    <p class="tagline">382 assertions. Pure logic only — <code>engine.js</code> and <code>importers.js</code> are
+    loaded on their own, with no DOM, no <code>app.js</code>, no build step and no test library. The last three
     sections read the app's other files as plain text; nothing else here executes them.</p>
 </header>
 
@@ -1011,6 +1011,190 @@ describe('Forecast — the balance cutoff',
                 const t = new Date();
                 assertEqual(isoOf(fc.monthList[0].date), isoOf(new Date(t.getFullYear(), t.getMonth(), 1)),
                     'the cutoff moves the scan, not the columns');
+            });
+        });
+    });
+
+describe('Forecast — two accounts, two snapshots',
+    'A snapshot belongs to the account, not to the plan. Someone who reconciled savings this ' +
+    'morning and last stated their current account in January has two lines in the sand, and ' +
+    'holding both accounts to the newer one throws away every month of the older one\'s own ' +
+    'activity in between.',
+    function () {
+        // Seven monthly charges fall between the older snapshot and the top of the
+        // month grid. They are history: they belong inside the opening balance, not
+        // dropped, and not shown as movement still to come.
+        const OLD_ASOF = monthsFromNowIso(-7, 1);
+        const NEW_ASOF = monthsFromNowIso(0, 1);
+
+        function twoSnapshotState(txs) {
+            const stale = mkAccount({ id: 'a_stale', name: 'Everyday', type: 'checking',
+                                      startingBalance: 1000, asOfDate: OLD_ASOF });
+            const fresh = mkAccount({ id: 'a_fresh', name: 'Savings', type: 'savings',
+                                      startingBalance: 500, asOfDate: NEW_ASOF });
+            return mkState({ accounts: [stale, fresh], transactions: txs || [] });
+        }
+
+        function monthlyChargeOn(acctId) {
+            return mkTx({ kind: 'expense', amount: 100, frequency: 'monthly',
+                          startDate: OLD_ASOF, categoryId: 'cat_housing', accountId: acctId });
+        }
+
+        function gapTransfer(toId, fromId) {
+            return mkTx({ kind: 'transfer', amount: 250, frequency: 'one-time',
+                          startDate: monthsFromNowIso(-3, 1), categoryId: 'cat_savings',
+                          accountId: toId, fromAccountId: fromId });
+        }
+
+        it('an account keeps its own snapshot when a newer one is on file', function () {
+            withState(twoSnapshotState([monthlyChargeOn('a_stale')]), function () {
+                const fc = buildForecast(12);
+                const stale = acctOf(fc, 'a_stale');
+                assertClose(stale.startRaw, 1000, 0.005, 'the snapshot itself is what the user typed in');
+                assertClose(stale.start, 300, 0.005,
+                    'seven monthly charges fall between this account\'s own as-of date and the top of ' +
+                    'the month grid. Reading 1000 here means the newest snapshot on file was applied to ' +
+                    'an account that was never stated as of that day, and seven charges vanished.');
+            });
+        });
+
+        it('the months in between are folded into the opening balance, not left in the grid', function () {
+            withState(twoSnapshotState([monthlyChargeOn('a_stale')]), function () {
+                const fc = buildForecast(12);
+                const stale = acctOf(fc, 'a_stale');
+                stale.monthly.forEach(function (v, i) {
+                    assertClose(v, -100, 0.005, 'month ' + i + ' carries one charge and only one');
+                });
+                assertClose(stale.running[0], 200, 0.005, '300 at the top of the grid, less this month\'s charge');
+                assertClose(sum(fc.monthlyExpense), 1200, 0.005,
+                    'twelve columns, twelve charges. History that predates the grid belongs in the ' +
+                    'opening balance — showing it again as spending still to come would charge it twice.');
+            });
+        });
+
+        it('the account with the newer snapshot is untouched by the older one', function () {
+            withState(twoSnapshotState([monthlyChargeOn('a_stale')]), function () {
+                const fc = buildForecast(12);
+                const fresh = acctOf(fc, 'a_fresh');
+                assertClose(fresh.startRaw, 500, 0.005);
+                assertClose(fresh.start, 500, 0.005, 'nothing is filed against it, so nothing may move it');
+                assertClose(fc.startingBalance, 800, 0.005,
+                    '300 + 500 — the aggregate is the sum of the two accounts read at their own dates');
+            });
+        });
+
+        it('a single-account book reads exactly as it did before', function () {
+            // One account is the only shape a single global cutoff ever got right,
+            // so it is the shape a per-account cutoff is most likely to break. These
+            // are the figures the balance-cutoff section above already asserts; they
+            // are repeated here so a regression is reported as a regression.
+            const solo = mkAccount({ id: 'a_solo', type: 'checking', startingBalance: 1000 });
+            withState(mkState({ accounts: [solo], transactions: [
+                mkTx({ kind: 'expense', amount: 400, frequency: 'one-time', startDate: daysFromNowIso(-1),
+                       categoryId: 'cat_housing', accountId: 'a_solo' })
+            ] }), function () {
+                const fc = buildForecast(12);
+                assertClose(fc.startingBalance, 1000, 0.005, 'yesterday is already inside the stated balance');
+                assertClose(acctOf(fc, 'a_solo').start, 1000, 0.005, 'and nothing has been folded in on top of it');
+                assertClose(sum(fc.monthlyExpense), 0, 0.005);
+            });
+
+            const solo2 = mkAccount({ id: 'a_solo2', type: 'checking', startingBalance: 1000 });
+            withState(mkState({ accounts: [solo2], transactions: [
+                mkTx({ kind: 'expense', amount: 400, frequency: 'one-time', startDate: todayIso(),
+                       categoryId: 'cat_housing', accountId: 'a_solo2' })
+            ] }), function () {
+                const fc = buildForecast(12);
+                assertClose(sum(fc.monthlyExpense), 400, 0.005, 'the cutoff still includes today itself');
+                assertClose(acctOf(fc, 'a_solo2').running[0], 600, 0.005);
+            });
+
+            const solo3 = mkAccount({ id: 'a_solo3', type: 'checking', startingBalance: 1000,
+                                      asOfDate: daysFromNowIso(10) });
+            withState(mkState({ accounts: [solo3], transactions: [
+                mkTx({ kind: 'expense', amount: 100, frequency: 'one-time', startDate: daysFromNowIso(5),
+                       categoryId: 'cat_housing', accountId: 'a_solo3' }),
+                mkTx({ kind: 'expense', amount: 200, frequency: 'one-time', startDate: daysFromNowIso(15),
+                       categoryId: 'cat_housing', accountId: 'a_solo3' })
+            ] }), function () {
+                const fc = buildForecast(12);
+                assertClose(sum(fc.monthlyExpense), 200, 0.005,
+                    'a balance stated ten days out already contains the charge five days out');
+                assertClose(acctOf(fc, 'a_solo3').start, 1000, 0.005,
+                    'and a snapshot in the future leaves nothing behind it to fold in');
+            });
+        });
+
+        it('an account with no as-of date is read as of today, beside one that is not', function () {
+            const stale = mkAccount({ id: 'a_stale', name: 'Everyday', type: 'checking',
+                                      startingBalance: 1000, asOfDate: OLD_ASOF });
+            const undated = mkAccount({ id: 'a_undated', name: 'Wallet', type: 'cash', startingBalance: 200 });
+            withState(mkState({ accounts: [stale, undated], transactions: [
+                monthlyChargeOn('a_stale'),
+                mkTx({ kind: 'expense', amount: 70, frequency: 'one-time', startDate: daysFromNowIso(-1),
+                       categoryId: 'cat_housing', accountId: 'a_undated' }),
+                mkTx({ kind: 'expense', amount: 50, frequency: 'one-time', startDate: todayIso(),
+                       categoryId: 'cat_housing', accountId: 'a_undated' })
+            ] }), function () {
+                const fc = buildForecast(12);
+                assertClose(acctOf(fc, 'a_undated').start, 200, 0.005,
+                    'with no snapshot on file the balance is read as today\'s, so yesterday\'s charge is ' +
+                    'already inside it. The other account\'s as-of date must not be borrowed for this one.');
+                assertClose(acctOf(fc, 'a_undated').monthly[0], -50, 0.005,
+                    'and today\'s charge still lands in the grid');
+                assertClose(acctOf(fc, 'a_stale').start, 300, 0.005,
+                    'while the dated account keeps its own history folded in');
+            });
+        });
+
+        it('a transfer dated after both snapshots moves once and leaves the total alone', function () {
+            withState(twoSnapshotState([
+                mkTx({ kind: 'transfer', amount: 250, frequency: 'one-time', startDate: todayIso(),
+                       categoryId: 'cat_savings', accountId: 'a_fresh', fromAccountId: 'a_stale' })
+            ]), function () {
+                const fc = buildForecast(12);
+                assertClose(acctOf(fc, 'a_stale').start, 1000, 0.005, 'nothing fell before the grid');
+                assertClose(acctOf(fc, 'a_fresh').start, 500, 0.005);
+                assertClose(acctOf(fc, 'a_stale').running[0], 750, 0.005, 'one debit, taken once');
+                assertClose(acctOf(fc, 'a_fresh').running[0], 750, 0.005, 'one credit, given once');
+                fc.runningBalance.forEach(function (v, i) {
+                    assertClose(v, 1500, 0.005,
+                        'month ' + i + ': moving money between two accounts cannot change the total');
+                });
+            });
+        });
+
+        it('a transfer inside the gap is taken from the account whose snapshot predates it', function () {
+            withState(twoSnapshotState([gapTransfer('a_fresh', 'a_stale')]), function () {
+                const fc = buildForecast(12);
+                const stale = acctOf(fc, 'a_stale');
+                const fresh = acctOf(fc, 'a_fresh');
+                assertClose(stale.start, 750, 0.005,
+                    'the money left three months ago, and a balance stated seven months ago cannot ' +
+                    'already know about it');
+                assertClose(fresh.start, 500, 0.005,
+                    'it arrived before this account\'s own snapshot was taken, so the stated 500 already ' +
+                    'contains it — crediting it again is the double-count');
+                stale.monthly.forEach(function (v, i) {
+                    assertClose(v, 0, 0.005,
+                        'month ' + i + ': a transfer that already happened is not still to come');
+                });
+                assertClose(fc.startingBalance, 1250, 0.005,
+                    'two snapshots taken on different days describe a total of 1250, not the 1500 the ' +
+                    'two stated figures add up to');
+            });
+        });
+
+        it('and the same rule reads the same way in the other direction', function () {
+            withState(twoSnapshotState([gapTransfer('a_stale', 'a_fresh')]), function () {
+                const fc = buildForecast(12);
+                assertClose(acctOf(fc, 'a_stale').start, 1250, 0.005,
+                    'the older account received it after its own snapshot, so the credit lands');
+                assertClose(acctOf(fc, 'a_fresh').start, 500, 0.005,
+                    'the newer account paid it before its own snapshot, so its 500 is already net of it');
+                assertClose(fc.startingBalance, 1750, 0.005,
+                    'the leg that lands is applied once and the leg already inside a stated balance is ' +
+                    'not applied twice — whichever way the money went');
             });
         });
     });
@@ -4737,6 +4921,144 @@ describe('Cross-file contracts — promises one file makes to another',
             assert(/\bmatchActuals\s*\(/.test(js),
                 'importers.js never calls matchActuals(), so an import can only ever guess at the link ' +
                 'between a statement line and the bill it settles');
+        });
+
+        it('the Categories form offers every kind the engine knows about', async function () {
+            requireHttp();
+            if (!KIND_LABELS || typeof KIND_LABELS !== 'object') {
+                failWith('engine.js no longer exports KIND_LABELS, so there is nothing to hold the form against');
+            }
+            const html = await source('index.html');
+            const select = (html.match(/<select\b[^>]*\bid="catKind"[\s\S]*?<\/select>/i) || [''])[0];
+            assert(select, 'index.html has no <select id="catKind">, so a category\'s kind can never be chosen');
+            const offered = collect(select, /<option\b[^>]*\bvalue\s*=\s*["']([^"']*)["']/gi);
+            assert(offered.length > 0,
+                'the kind select carries no <option value="…"> at all, so this test would pass on an ' +
+                'empty dropdown and prove nothing');
+            const known = Object.keys(KIND_LABELS);
+            const missing = known.filter(function (k) { return offered.indexOf(k) === -1; });
+            const unknown = offered.filter(function (k) { return known.indexOf(k) === -1; });
+            assertEqual(missing.length, 0,
+                'the engine understands ' + missing.join(', ') + ' and the form does not offer it. Every ' +
+                'panel that reports on that kind is then unreachable, because no category can be filed ' +
+                'under it. The list here is read from KIND_LABELS, so a kind added to the engine without ' +
+                'an option added beside it fails this test rather than shipping unnoticed.');
+            assertEqual(unknown.length, 0,
+                'the form offers ' + unknown.join(', ') + ', which KIND_LABELS has no entry for, so a ' +
+                'category saved with it is labelled by its raw value everywhere it appears');
+        });
+    });
+
+/* ───── The amount on a row ───── */
+
+// Every issues.push(...) call in a function body, whole rather than truncated to
+// a line, so a note can be read for what it says and for whether it names its row.
+function pushedNotes(body) {
+    return String(body).match(/issues\.push\([^;]*\)/g) || [];
+}
+
+// The warning strip builds each group from a helper called with no arguments.
+// Given the line that mentions a group, this is the helper behind it — found by
+// what the strip actually names rather than by a name written down here, so the
+// helper can be renamed without turning this into a false alarm.
+function stripGroupSource(js, strip, re) {
+    const line = (strip.match(re) || [''])[0];
+    const name = (line.match(/\b([A-Za-z_$][\w$]*)\s*\(\s*\)/) || [])[1] || '';
+    return { line: line.trim(), name: name, body: name ? functionBody(js, name) : '' };
+}
+
+describe('Cross-file contracts — the amount on a row',
+    'The forecast reads a magnitude and takes the direction from the row\'s kind, so a signed ' +
+    'figure is shown and exported as one thing while being counted as another. app.js owns that ' +
+    'repair and the notice that goes with it; both are read here as text, like the sections above.',
+    function () {
+        it('a negative amount from a file is stored as its magnitude', async function () {
+            requireHttp();
+            const body = functionBody(await source('app.js'), 'coerceTransaction');
+            assert(body, 'app.js no longer defines coerceTransaction(), so nothing reads an imported row at all');
+            assert(/\bamount\s*=\s*Math\.abs\s*\(/.test(body),
+                'the figure from the file is stored exactly as it was written. A row that says -100 ' +
+                'then sits in the plan as -100 while the forecast spends 100, and the table, the ' +
+                'charts and the exported workbook disagree for as long as that row survives.');
+            assert(!/\bamount\s*=\s*toNum\s*\(\s*r\.amount/.test(body),
+                'the raw signed figure is still what reaches the stored row');
+        });
+
+        it('and the row that carried it is named in an import issue', async function () {
+            requireHttp();
+            const body = functionBody(await source('app.js'), 'coerceTransaction');
+            assert(body, 'app.js no longer defines coerceTransaction()');
+            const notes = pushedNotes(body).filter(function (n) { return /\bnegative\b/i.test(n); });
+            assert(notes.length > 0,
+                'the sign is repaired and nothing is said about it. Changing a figure someone typed ' +
+                'and staying silent is the one thing an importer must never do.');
+            assert(notes.some(function (n) { return n.indexOf('${label}') !== -1; }),
+                'the note does not name the row it is about, so a hundred-row workbook produces a ' +
+                'message the user cannot act on: ' + notes.join(' / '));
+        });
+
+        it('so an export round-trip cannot put the sign back', async function () {
+            requireHttp();
+            const body = functionBody(await source('app.js'), 'exportExcel');
+            assert(body, 'app.js no longer defines exportExcel()');
+            assert(/parseFloat\(\s*t\.amount\s*\)/.test(body),
+                'the Transactions sheet no longer writes the stored amount, so what a round-trip emits ' +
+                'is no longer what the import repaired');
+            assert(!/-\s*(?:Math\.abs\s*\(\s*)?parseFloat\(\s*t\.amount\s*\)/.test(body),
+                'the export re-signs the amount on its way out, so a workbook that imported cleanly ' +
+                'comes back out negative and the next import has to repair it all over again');
+        });
+
+        it('a zero amount from a file still raises an import issue', async function () {
+            requireHttp();
+            const body = functionBody(await source('app.js'), 'coerceTransaction');
+            assert(body, 'app.js no longer defines coerceTransaction()');
+            const notes = pushedNotes(body).filter(function (n) { return /\bzero\b/i.test(n); });
+            assert(notes.length > 0,
+                'a row with no amount is kept — it may be a placeholder someone means to fill in — but ' +
+                'a kept row that can never move the forecast has to say so');
+            assert(notes.some(function (n) { return n.indexOf('${label}') !== -1; }),
+                'the note does not name the row it is about: ' + notes.join(' / '));
+        });
+
+        it('a zero-amount row already in the saved plan is named in the warning strip', async function () {
+            requireHttp();
+            const js = await source('app.js');
+            const strip = functionBody(js, 'renderForecastWarnings');
+            assert(strip, 'app.js no longer defines renderForecastWarnings(), so nothing puts a ' +
+                'data-quality note in front of the user at all');
+            const group = stripGroupSource(js, strip, /^.*\bzero.*$/im);
+            assert(group.line,
+                'the strip lists the forecast\'s own findings and the last import\'s notes and nothing ' +
+                'else. The import check only ever sees rows arriving from a file, so a zero typed into ' +
+                'the form — or one that predates that check — sits in the plan invisibly for good.');
+            assert(group.body, 'the strip builds its zero-amount group from ' +
+                (group.name ? group.name + '(), which app.js does not define' : 'nothing it names') +
+                ': ' + group.line);
+            assert(/state\.transactions|savedTransactions\s*\(/.test(group.body),
+                group.name + '() never reads the saved plan, so it can only be repeating the last ' +
+                'import\'s notes: ' + group.body);
+            assert(/===?\s*0\b/.test(group.body),
+                group.name + '() never tests an amount against zero: ' + group.body);
+        });
+
+        it('and so is one still stored with a negative amount', async function () {
+            requireHttp();
+            const js = await source('app.js');
+            const strip = functionBody(js, 'renderForecastWarnings');
+            assert(strip, 'app.js no longer defines renderForecastWarnings()');
+            const group = stripGroupSource(js, strip, /^.*(?:negative|signed).*$/im);
+            assert(group.line,
+                'the import path repairs the rows arriving now, and a plan saved before that was true ' +
+                'still holds them. The table shows one figure, the forecast counts another, and the ' +
+                'strip says nothing about why.');
+            assert(group.body, 'the strip builds its negative-amount group from ' +
+                (group.name ? group.name + '(), which app.js does not define' : 'nothing it names') +
+                ': ' + group.line);
+            assert(/state\.transactions|savedTransactions\s*\(/.test(group.body),
+                group.name + '() never reads the saved plan: ' + group.body);
+            assert(/<\s*0\b/.test(group.body),
+                group.name + '() never tests an amount for a negative: ' + group.body);
         });
     });
 
