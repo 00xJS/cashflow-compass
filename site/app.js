@@ -533,11 +533,100 @@ function accountColumnCount() {
     return document.querySelectorAll('#accountsTable thead th').length || 5;
 }
 
+/* ───── Row quick-action menu ─────
+ * One ⋯ button per row opens a popover listing that row's actions. The popover
+ * is a single element on the body, positioned at the button, so the scrolling
+ * table wrapper cannot clip it. Items are plain closures — nothing is cloned.
+ */
+let rowMenuAnchor = null;
+
+function rowMenuButton(id, label) {
+    return `<button type="button" class="icon row-menu-btn" data-row-menu="${escapeHtml(id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${escapeHtml(label)}" title="Actions">⋯</button>`;
+}
+
+function rowMenuPopover() {
+    let pop = el('rowMenuPop');
+    if (pop) return pop;
+    pop = document.createElement('div');
+    pop.id = 'rowMenuPop';
+    pop.className = 'row-menu-pop hidden';
+    pop.setAttribute('role', 'menu');
+    document.body.appendChild(pop);
+    document.addEventListener('click', e => {
+        if (rowMenuAnchor && !pop.contains(e.target) && e.target !== rowMenuAnchor) closeRowMenu();
+    });
+    document.addEventListener('keydown', e => {
+        if (!rowMenuAnchor) return;
+        const items = Array.from(pop.querySelectorAll('button'));
+        const i = items.indexOf(document.activeElement);
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeRowMenu(true); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); (items[i + 1] || items[0]).focus(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); (items[i - 1] || items[items.length - 1]).focus(); }
+        else if (e.key === 'Tab') closeRowMenu();
+    });
+    window.addEventListener('resize', () => closeRowMenu());
+    document.addEventListener('scroll', () => closeRowMenu(), true);
+    return pop;
+}
+
+function closeRowMenu(refocus) {
+    const pop = el('rowMenuPop');
+    if (!pop || !rowMenuAnchor) return;
+    pop.classList.add('hidden');
+    pop.innerHTML = '';
+    const anchor = rowMenuAnchor;
+    rowMenuAnchor = null;
+    anchor.setAttribute('aria-expanded', 'false');
+    if (refocus && document.contains(anchor)) anchor.focus();
+}
+
+function openRowMenu(anchor, items) {
+    const pop = rowMenuPopover();
+    if (rowMenuAnchor === anchor) { closeRowMenu(true); return; }
+    closeRowMenu();
+    pop.innerHTML = '';
+    (items || []).forEach(item => {
+        if (!item) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('role', 'menuitem');
+        btn.className = 'row-menu-item' + (item.danger ? ' danger-item' : '');
+        const ico = document.createElement('span');
+        ico.className = 'row-menu-ico';
+        ico.setAttribute('aria-hidden', 'true');
+        ico.textContent = item.icon || '';
+        btn.appendChild(ico);
+        btn.appendChild(document.createTextNode(item.label));
+        btn.onclick = () => { closeRowMenu(); item.onClick(); };
+        pop.appendChild(btn);
+    });
+    rowMenuAnchor = anchor;
+    anchor.setAttribute('aria-expanded', 'true');
+    pop.classList.remove('hidden');
+    const r = anchor.getBoundingClientRect();
+    const w = pop.offsetWidth, h = pop.offsetHeight;
+    let left = Math.min(r.right - w, window.innerWidth - w - 8);
+    if (left < 8) left = 8;
+    let top = r.bottom + 4;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 4);
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+    const first = pop.querySelector('button');
+    if (first) first.focus();
+}
+
+function wireRowMenus(tbody, itemsFor) {
+    tbody.querySelectorAll('[data-row-menu]').forEach(b => {
+        b.onclick = e => { e.stopPropagation(); openRowMenu(b, itemsFor(b.dataset.rowMenu)); };
+    });
+}
+
 function renderAccounts() {
     const tbody = document.querySelector('#accountsTable tbody');
     if (!tbody) return;
+    closeRowMenu();
     if (state.accounts.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="${accountColumnCount()}" class="empty">No accounts yet. Add one above to set your starting balance.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${accountColumnCount()}" class="empty">No accounts yet. Use ＋ Add account to set your starting balance.</td></tr>`;
     } else {
         tbody.innerHTML = state.accounts.map(a => {
             const apr = parseFloat(a.apr) || 0;
@@ -552,10 +641,7 @@ function renderAccounts() {
                 <td><span class="tag">${escapeHtml(a.type)}</span>${typeNote}</td>
                 <td class="num">${escapeHtml(fmtMoney(a.startingBalance))}${isCredit ? ' <span class="muted-text">owed</span>' : ''}${balanceNote}</td>
                 <td>${escapeHtml(a.asOfDate || '')}</td>
-                <td class="num row-actions">
-                    <button class="icon" data-edit-acct="${escapeHtml(a.id)}" aria-label="Edit account ${escapeHtml(a.name)}" title="Edit">✎</button>
-                    <button class="icon" data-del-acct="${escapeHtml(a.id)}" aria-label="Delete account ${escapeHtml(a.name)}" title="Delete">✕</button>
-                </td>
+                <td class="num row-actions">${rowMenuButton(a.id, a.name)}</td>
             </tr>
         `;
         }).join('');
@@ -563,8 +649,10 @@ function renderAccounts() {
     const total = state.accounts.reduce((s, a) => s + (a.type === 'credit' ? -1 : 1) * (parseFloat(a.startingBalance) || 0), 0);
     setText('accountsMeta', state.accounts.length === 0 ? '' : `${state.accounts.length} account(s) · Net ${fmtMoney(total)}`);
 
-    tbody.querySelectorAll('[data-edit-acct]').forEach(b => b.onclick = () => editAccount(b.dataset.editAcct));
-    tbody.querySelectorAll('[data-del-acct]').forEach(b => b.onclick = () => deleteAccount(b.dataset.delAcct));
+    wireRowMenus(tbody, id => [
+        { icon: '✎', label: 'Edit', onClick: () => editAccount(id) },
+        { icon: '✕', label: 'Delete', danger: true, onClick: () => deleteAccount(id) }
+    ]);
 }
 
 function acctAprInput()        { return pick('acctApr', 'acctAPR'); }
@@ -683,6 +771,7 @@ function renderCategories() {
 
     const tbody = document.querySelector('#categoriesTable tbody');
     if (!tbody) return;
+    closeRowMenu();
     const usage = {};
     state.transactions.forEach(t => { usage[t.categoryId] = (usage[t.categoryId] || 0) + 1; });
     const canMove = state.categories.length > 1;
@@ -691,18 +780,17 @@ function renderCategories() {
             <td><span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:${safeColor(c.color)};vertical-align:middle;"></span></td>
             <td>${escapeHtml(c.name)}${usage[c.id] ? ` <span class="muted-text">${usage[c.id]} in use</span>` : ''}</td>
             <td><span class="tag">${escapeHtml(KIND_LABELS[c.kind] || c.kind)}</span></td>
-            <td class="num row-actions">
-                ${usage[c.id] && canMove
-                    ? `<button class="icon" data-move-cat="${escapeHtml(c.id)}" aria-label="Move the ${usage[c.id]} transaction(s) filed under ${escapeHtml(c.name)} to another category" title="Move its transactions elsewhere">⇄</button>`
-                    : ''}
-                <button class="icon" data-edit-cat="${escapeHtml(c.id)}" aria-label="Edit category ${escapeHtml(c.name)}" title="Edit">✎</button>
-                <button class="icon" data-del-cat="${escapeHtml(c.id)}" aria-label="Delete category ${escapeHtml(c.name)}" title="Delete">✕</button>
-            </td>
+            <td class="num row-actions">${rowMenuButton(c.id, c.name)}</td>
         </tr>
     `).join('');
-    tbody.querySelectorAll('[data-edit-cat]').forEach(b => b.onclick = () => editCategory(b.dataset.editCat));
-    tbody.querySelectorAll('[data-del-cat]').forEach(b => b.onclick = () => deleteCategory(b.dataset.delCat));
-    tbody.querySelectorAll('[data-move-cat]').forEach(b => b.onclick = () => reassignCategory(b.dataset.moveCat));
+    wireRowMenus(tbody, id => {
+        const items = [{ icon: '✎', label: 'Edit', onClick: () => editCategory(id) }];
+        if (usage[id] && canMove) {
+            items.push({ icon: '⇄', label: `Move its ${usage[id]} transaction(s) elsewhere`, onClick: () => reassignCategory(id) });
+        }
+        items.push({ icon: '✕', label: 'Delete', danger: true, onClick: () => deleteCategory(id) });
+        return items;
+    });
 }
 
 // Moving a category's transactions used to be reachable only by deleting the
@@ -935,10 +1023,141 @@ function showFormErrors(errors) {
     });
 }
 
+/* ───── Bulk selection ─────
+ * Selection is UI state, not data: it lives here, survives a re-render, and is
+ * pruned to rows that still exist.
+ */
+const txSelection = new Set();
+
+function selectedTransactions() {
+    return state.transactions.filter(t => txSelection.has(t.id));
+}
+
+function updateTxBulkBar() {
+    const ids = new Set(state.transactions.map(t => t.id));
+    Array.from(txSelection).forEach(id => { if (!ids.has(id)) txSelection.delete(id); });
+    const n = txSelection.size;
+    setHidden('txBulkBar', n === 0);
+    setText('txBulkCount', `${n} selected`);
+    const all = el('txSelectAll');
+    if (all) {
+        const boxes = Array.from(document.querySelectorAll('#txTable tbody [data-select]'));
+        const checked = boxes.filter(b => b.checked).length;
+        all.checked = boxes.length > 0 && checked === boxes.length;
+        all.indeterminate = checked > 0 && checked < boxes.length;
+    }
+    document.querySelectorAll('#txTable tbody tr[data-tx-row]').forEach(tr => {
+        tr.classList.toggle('selected', txSelection.has(tr.dataset.txRow));
+    });
+}
+
+function bulkSetPaused(paused) {
+    const list = selectedTransactions();
+    if (!list.length) return;
+    snapshotForUndo(`${paused ? 'pausing' : 'resuming'} ${list.length} transaction(s)`);
+    list.forEach(t => { t.paused = paused; });
+    saveState();
+    renderAll();
+    flashWithUndo(`${paused ? 'Paused' : 'Resumed'} ${list.length} transaction(s).`);
+}
+
+function bulkDelete() {
+    const list = selectedTransactions();
+    if (!list.length) return;
+    confirmModal(`Delete ${list.length} transaction(s)?`,
+        'They will be removed from the forecast. Undo is offered afterwards.', () => {
+        snapshotForUndo(`deleting ${list.length} transaction(s)`);
+        const ids = new Set(list.map(t => t.id));
+        state.transactions = state.transactions.filter(t => !ids.has(t.id));
+        if (editingTxId && ids.has(editingTxId)) cancelTxEdit();
+        txSelection.clear();
+        saveState();
+        renderAll();
+        flashWithUndo(`Deleted ${list.length} transaction(s).`);
+    }, { confirmLabel: 'Delete' });
+}
+
+on('txBulkPause',  'click', () => bulkSetPaused(true));
+on('txBulkResume', 'click', () => bulkSetPaused(false));
+on('txBulkDelete', 'click', bulkDelete);
+on('txBulkClear',  'click', () => { txSelection.clear(); renderTransactions(); });
+
+/* ───── Inline editing ─────
+ * Name and amount can be changed in the table itself. Commit on Enter or blur,
+ * abandon on Escape; every commit is one undo step.
+ */
+function startInlineEdit(cell) {
+    const id = cell.dataset.tx;
+    const field = cell.dataset.inline;
+    const t = state.transactions.find(x => x.id === id);
+    if (!t || cell.querySelector('input')) return;
+    const input = document.createElement('input');
+    input.type = field === 'amount' ? 'number' : 'text';
+    if (field === 'amount') { input.min = '0.01'; input.step = '0.01'; }
+    input.value = field === 'amount' ? t.amount : t.name;
+    input.className = 'inline-edit';
+    input.setAttribute('aria-label', (field === 'amount' ? 'Amount for ' : 'Name for ') + t.name);
+    cell.classList.add('editing');
+    cell.textContent = '';
+    cell.appendChild(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = commit => {
+        if (done) return;
+        done = true;
+        if (commit) {
+            const raw = input.value.trim();
+            if (field === 'amount') {
+                const n = parseFloat(raw);
+                if (!(n > 0)) { flashStatus('Enter an amount above zero.', { tone: 'warning' }); renderTransactions(); return; }
+                const rounded = Math.round(n * 100) / 100;
+                if (rounded !== parseFloat(t.amount)) {
+                    snapshotForUndo('changing the amount of ' + t.name);
+                    t.amount = rounded;
+                    saveState();
+                    renderAll();
+                    flashWithUndo(`${t.name} is now ${fmtMoney(t.amount)}.`);
+                    return;
+                }
+            } else {
+                if (!raw) { flashStatus('A transaction needs a name.', { tone: 'warning' }); renderTransactions(); return; }
+                if (raw !== t.name) {
+                    const old = t.name;
+                    snapshotForUndo('renaming ' + old);
+                    t.name = raw;
+                    saveState();
+                    renderAll();
+                    flashWithUndo(`Renamed ${old} to ${raw}.`);
+                    return;
+                }
+            }
+        }
+        renderTransactions();
+    };
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+        else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
+}
+
+function wireInlineEdits(tbody) {
+    tbody.querySelectorAll('td[data-inline]').forEach(cell => {
+        cell.ondblclick = () => startInlineEdit(cell);
+        cell.onkeydown = e => {
+            if (e.target !== cell) return;
+            if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); startInlineEdit(cell); }
+        };
+    });
+}
+
 function renderTransactions() {
+    closeRowMenu();
     const head = el('txHeaderRow');
     if (head) {
         head.innerHTML =
+            '<th class="sel"><input type="checkbox" id="txSelectAll" aria-label="Select every transaction shown"></th>' +
             sortableTh('transactions', 'name', 'Name') +
             '<th>Kind</th>' +
             '<th>Category</th>' +
@@ -983,7 +1202,7 @@ function renderTransactions() {
     }
 
     if (sorted.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="12" class="empty">No transactions${state.transactions.length ? ' match the filter.' : ' yet. Add one above.'}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="13" class="empty">No transactions${state.transactions.length ? ' match the filter.' : ' yet. Use ＋ Add transaction to start the plan.'}</td></tr>`;
     } else {
         tbody.innerHTML = sorted.map(t => {
             const cat = state.categories.find(c => c.id === t.categoryId);
@@ -992,34 +1211,51 @@ function renderTransactions() {
             const next = toDate(nextById.get(t.id));
             const kindClass = ['income', 'expense', 'transfer'].includes(t.kind) ? t.kind : '';
             return `
-                <tr${t.paused ? ' style="opacity:0.55;"' : ''}>
-                    <td>${escapeHtml(t.name)}${t.paused ? ' <span class="tag paused">paused</span>' : ''}</td>
+                <tr data-tx-row="${escapeHtml(t.id)}"${t.paused ? ' class="paused-row"' : ''}>
+                    <td class="sel"><input type="checkbox" data-select="${escapeHtml(t.id)}" aria-label="Select ${escapeHtml(t.name)}"${txSelection.has(t.id) ? ' checked' : ''}></td>
+                    <td class="editable" data-inline="name" data-tx="${escapeHtml(t.id)}" tabindex="0" title="Double-click or press Enter to rename">${escapeHtml(t.name)}${t.paused ? ' <span class="tag paused">paused</span>' : ''}</td>
                     <td><span class="tag ${kindClass}">${escapeHtml(t.kind)}</span></td>
                     <td>${cat ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${safeColor(cat.color)};margin-right:6px;vertical-align:middle;"></span>${escapeHtml(cat.name)}` : '—'}</td>
                     <td>${acct ? escapeHtml(acct.name) : '—'}</td>
-                    <td class="num">${escapeHtml(fmtMoney(t.amount))}</td>
+                    <td class="num editable" data-inline="amount" data-tx="${escapeHtml(t.id)}" tabindex="0" title="Double-click or press Enter to change the amount">${escapeHtml(fmtMoney(t.amount))}</td>
                     <td>${escapeHtml(FREQUENCY_LABELS[t.frequency] || t.frequency)}${t.frequency === 'custom' ? ` (${escapeHtml(t.customN)} ${escapeHtml(t.customUnit)})` : ''}${t.escalation ? ` · +${escapeHtml(t.escalation)}%/yr` : ''}</td>
                     <td>${escapeHtml(t.startDate || '')}</td>
                     <td>${escapeHtml(t.endDate || '')}</td>
                     <td>${next ? escapeHtml(fmtDate(next)) : '<span class="muted-text">—</span>'}</td>
                     <td class="num">${escapeHtml(fmtMoney(ann))}</td>
                     <td>${(t.tags || []).map(tg => `<span class="tag">${escapeHtml(tg)}</span>`).join('')}</td>
-                    <td class="num row-actions">
-                        <button class="icon" data-pause="${escapeHtml(t.id)}" aria-label="${t.paused ? 'Resume' : 'Pause'} ${escapeHtml(t.name)}" title="${t.paused ? 'Resume' : 'Pause'}">${t.paused ? '▶' : '⏸'}</button>
-                        <button class="icon" data-clone="${escapeHtml(t.id)}" aria-label="Duplicate ${escapeHtml(t.name)}" title="Duplicate">⎘</button>
-                        <button class="icon" data-edit="${escapeHtml(t.id)}" aria-label="Edit ${escapeHtml(t.name)}" title="Edit">✎</button>
-                        <button class="icon" data-del="${escapeHtml(t.id)}" aria-label="Delete ${escapeHtml(t.name)}" title="Delete">✕</button>
-                    </td>
+                    <td class="num row-actions">${rowMenuButton(t.id, t.name)}</td>
                 </tr>
             `;
         }).join('');
     }
     setText('txMeta', state.transactions.length === 0 ? '' : `${filtered.length} of ${state.transactions.length} shown`);
 
-    tbody.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editTransaction(b.dataset.edit));
-    tbody.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteTransaction(b.dataset.del));
-    tbody.querySelectorAll('[data-pause]').forEach(b => b.onclick = () => togglePause(b.dataset.pause));
-    tbody.querySelectorAll('[data-clone]').forEach(b => b.onclick = () => cloneTransaction(b.dataset.clone));
+    wireRowMenus(tbody, id => {
+        const t = state.transactions.find(x => x.id === id);
+        if (!t) return [];
+        return [
+            { icon: '✎', label: 'Edit', onClick: () => editTransaction(id) },
+            { icon: t.paused ? '▶' : '⏸', label: t.paused ? 'Resume' : 'Pause', onClick: () => togglePause(id) },
+            { icon: '⎘', label: 'Duplicate', onClick: () => cloneTransaction(id) },
+            { icon: '✕', label: 'Delete', danger: true, onClick: () => deleteTransaction(id) }
+        ];
+    });
+    wireInlineEdits(tbody);
+    tbody.querySelectorAll('[data-select]').forEach(box => {
+        box.onchange = () => {
+            if (box.checked) txSelection.add(box.dataset.select); else txSelection.delete(box.dataset.select);
+            updateTxBulkBar();
+        };
+    });
+    const all = el('txSelectAll');
+    if (all) {
+        all.onchange = () => {
+            sorted.forEach(t => { if (all.checked) txSelection.add(t.id); else txSelection.delete(t.id); });
+            renderTransactions();
+        };
+    }
+    updateTxBulkBar();
 }
 
 function editTransaction(id) {

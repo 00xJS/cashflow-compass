@@ -13,7 +13,7 @@
    ========================================================= */
 
 const CACHE_PREFIX = 'cashflow-compass-shell';
-const CACHE_NAME = CACHE_PREFIX + '-v5';
+const CACHE_NAME = CACHE_PREFIX + '-v6';
 
 // Relative so the worker keeps working from any scope (root, /app/, a Netlify
 // deploy preview path). './' is the start_url the manifest declares.
@@ -25,6 +25,8 @@ const SHELL = [
     'importers.js',
     'features.js',
     'portability.js',
+    'shell.js',
+    'vendor/InterVariable.woff2',
     'guide.html',
     'vendor/chart.umd.min.js',
     'vendor/xlsx.full.min.js',

@@ -12,7 +12,7 @@ Part of the [Observation Deck](https://observation-deck.netlify.app/) family of 
 
 No build step, no backend, no account sign-up, no network requests — open `site/index.html` and start budgeting. Everything, including the two vendored libraries, is served from the folder, so the app works fully offline. Your data lives in your browser's LocalStorage and travels with you via the file you export.
 
-A **[Getting Started guide](site/guide.html)** is built into the app (linked in the header) and covers every feature in depth — accounts and transfers, the credit-card model, categories, frequencies, the forecast grid, charts, insights, check-ins, importing your bank's file, plan-vs-actual, the debt planner, goals, the bills calendar, scenarios, backups and encryption, and pro tips.
+A **[Getting Started guide](site/guide.html)** is built into the app (linked from the navigation rail and the Data menu) and covers every feature in depth — accounts and transfers, the credit-card model, categories, frequencies, the forecast grid, charts, insights, check-ins, importing your bank's file, plan-vs-actual, the debt planner, goals, the bills calendar, scenarios, backups and encryption, and pro tips.
 
 ![Six charts — income against expenses, projected running balance, spend and income by category, a stacked category trend and the ten largest costs — above a panel of auto-generated insight cards reading 49.6% savings rate, housing as the biggest category, 67.4% of spend in the top three, 7.6 months of emergency fund, zero days in the red and $40,291 projected cash](docs/screenshot.png)
 
@@ -23,8 +23,8 @@ A **[Getting Started guide](site/guide.html)** is built into the app (linked in 
 1. Try the [live demo](https://cashflow-comp.netlify.app/), **or** open `site/index.html` in any modern browser (Chrome, Safari, Firefox, Edge), **or** deploy the `site/` folder to Netlify (drag-and-drop or `netlify deploy`). All three are the same app; your data stays in whichever browser you used.
 2. **Add an account** — give it a starting balance and the date that balance was true ("as of"). The forecast counts money forward from the latest as-of date across your accounts, so anything already paid before that date isn't replayed on top of the balance you entered. Add as many accounts as you like (checking, savings, credit, investment, cash).
 3. **Add transactions** — recurring or one-time, income / expense / transfer, with the frequency that matches reality (bi-weekly paycheck, monthly rent, annual insurance, etc.).
-4. Scroll down — the **Forecast grid**, **Charts**, and **Insights** populate automatically.
-5. Click **`⬇ Excel`** any time to back up; click **`⬆ Excel`** later to restore.
+4. Open **Overview** for the headline numbers, charts and insights, and **Forecast** for the month-by-month grid — both fill in automatically. The rail on the left (a tab bar on a phone) switches between the six views; keys `1`–`6` do the same.
+5. Click **`⬇ Export`** in the top bar any time to back up; **Data ▾ → Import Excel workbook** later to restore.
 
 Then, once the plan is roughly right and you want to know how honest it is:
 
@@ -240,11 +240,11 @@ A file written by a *newer* version of the app is refused outright rather than i
 > **Two things do not survive a round trip.** A Goal category's target amount and target date are dropped on import — by either format — so a goal comes back tracking contributions with no target to measure them against. So is the remembered CSV column mapping for an account, which has to be pointed at the right columns again on the next bank file. The plan and the recorded history themselves are written and read back in full.
 
 ### JSON export / import
-Lighter if you only want to move state between browsers, and the file is your state itself rather than a rendering of it — plan, actuals, check-ins and scenarios alike. Same replace-all semantics. Use the **`{ JSON }`** and **`⇪ JSON`** buttons in the header.
+Lighter if you only want to move state between browsers, and the file is your state itself rather than a rendering of it — plan, actuals, check-ins and scenarios alike. Same replace-all semantics. Both live under **Data ▾** in the top bar.
 
 ### Encrypted export (optional)
 
-The **Backup & Portability** panel can write a **passphrase-protected JSON export**: the passphrase is stretched into a key with PBKDF2-SHA256 (310,000 rounds) and the file is encrypted with AES-GCM, using the browser's own WebCrypto engine. To open one, use the ordinary `⇪ JSON` import and supply the passphrase. No server, no account, no key stored anywhere.
+The **Backup & Portability** panel can write a **passphrase-protected JSON export**: the passphrase is stretched into a key with PBKDF2-SHA256 (310,000 rounds) and the file is encrypted with AES-GCM, using the browser's own WebCrypto engine. To open one, use the ordinary **Data ▾ → Import JSON file** and supply the passphrase. No server, no account, no key stored anywhere.
 
 > ⚠️ **If you forget the passphrase, the file is gone.** There is no reset link, no recovery key, no support address, and no back door — not because nobody has built one, but because a back door would defeat the point. Nobody, including the author of this app, can open that file for you. Keep a plain export as well until you are sure the passphrase is safe.
 
@@ -259,7 +259,7 @@ Put that file in a cloud-synced folder — iCloud Drive, Dropbox, OneDrive, Goog
 - **Connect a file** creates one; **Use an existing file** adopts one and asks first whether to load it into the app or overwrite it from the browser. **Write now** / **Load from file** force a save or reload; **Reconnect** re-grants permission in a new session; **Disconnect** stops writing and leaves the file as last written
 - It uses the **File System Access API**, so it needs a **Chromium-based browser** (Chrome, Edge, Brave, Opera, Arc) on a **secure origin**. Firefox and Safari don't implement it, and no browser gives a `file://` page write access — serve the folder over `http://localhost` or https. When it's unavailable the panel says which of those reasons applies
 - Writes are debounced and capped at one a second, so editing doesn't thrash the file or your sync client. LocalStorage keeps working alongside it
-- **The connected file holds what an export holds** — a `.json` is the state file itself, a `.xlsx` is the same eight-sheet workbook the ⬇ Excel button writes, and **Load from file** reads either through the ordinary importer. So the round trip has the same one gap a manual export does: see the note under [Excel export / import](#excel-export--import)
+- **The connected file holds what an export holds** — a `.json` is the state file itself, a `.xlsx` is the same eight-sheet workbook the ⬇ Export button writes, and **Load from file** reads either through the ordinary importer. So the round trip has the same one gap a manual export does: see the note under [Excel export / import](#excel-export--import)
 - **Last write wins.** File sync is not merge: if two devices edit at once, one side's edits are lost or you get a conflicted copy. Let one device finish syncing before picking up the next, and hit **Load from file** before editing if another device has been in it
 - Everywhere else — and any time you'd rather not — the **export / import buttons remain the fully-supported path**. Nothing is gated behind live mode
 
@@ -273,11 +273,17 @@ Put that file in a cloud-synced folder — iCloud Drive, Dropbox, OneDrive, Goog
 
 ### Quality-of-life
 - **Observation Deck dark theme** — the shared "mission control" design language used across the deck
+- **Six views instead of one long page** — Overview (headline tiles, charts, insights), Plan (accounts, categories, transactions), Forecast (grid, balances by account, bills calendar), Reality (check-ins, plan vs actual, bank-file import), Planning (debt, goals, scenarios) and Backup. A rail on the left switches between them, a tab bar does on phones, and `1`–`6` do from the keyboard; the URL hash (`#/forecast`) remembers where you were. A sticky top bar carries the horizon and currency, the Export button, a **Data ▾** menu for the rest, and a chip naming the active scenario
 - **Currency selector** (USD / EUR / GBP / CAD / AUD / JPY) — changes formatting only; amounts are relabelled, never converted
-- **Export-age indicator** — the header shows *Exported today* / *Exported 12d ago* / *Never exported*, and once it's been over a month — or was never exported at all — a warning appears with both export buttons in it
+- **Export-age indicator** — the top bar shows *Exported today* / *Exported 12d ago* / *Never exported*, and once it's been over a month — or was never exported at all — a warning appears with both export buttons in it
 - **Single-level undo** — deleting an account, category or transaction offers an Undo button in the status message, restoring any reassignments too. So do the destructive big ones: an import, a reset, and loading the sample data
-- **Collapsible sections** — every section collapses from its own header: categories, transactions, forecast, balances by account, bills calendar, visualizations, check-in, plan vs actual, debt payoff, goals, scenarios and backup
-- **Empty-state welcome banner** with a "Load sample data" button to explore the app instantly
+- **Forms in slide-over drawers** — ＋ Add account / category / transaction opens a panel from the right; editing a row opens the same panel filled in. The tables keep the whole width
+- **Row menus, inline editing and bulk actions** — every row has a ⋯ menu (edit, pause, duplicate, delete). Double-click a transaction's name or amount to change it in place. Tick rows to pause, resume or delete them together; each is one undo step
+- **Command palette** — `⌘K` / `Ctrl+K` (or the search box in the top bar) jumps to any view or section, runs any action, and opens any account, category, transaction or scenario by name
+- **Overview tiles link onward** — the projected-cash tile carries a sparkline of the running balance, a Next 7 days tile totals what lands this week, and every insight card leads to the section behind it
+- **First-run checklist** — three steps (account, income, a recurring expense) with a button that opens the right form; it retires itself once the plan has the basics, or on Dismiss
+- **Inter, vendored** — the interface typeface ships in `site/vendor/` under the SIL OFL; no font is ever fetched
+- **Collapsible sections** — within a view, every section collapses from its own header: categories, transactions, forecast, balances by account, bills calendar, visualizations, check-in, plan vs actual, debt payoff, goals, scenarios and backup
 - Mobile-responsive layout
 - All forms validate inline; required fields are clearly marked
 
@@ -298,6 +304,9 @@ site/           ← the whole app. This is what gets deployed
   features.js   The reality-check and planning panels: check-ins, per-account balances, plan-vs-actual,
                 debt payoff, goals, the pay-vs-bills calendar, scenarios
   portability.js Live workbook mode (File System Access API) and passphrase encryption (WebCrypto)
+  shell.js      The app shell: the navigation rail and views, the Data menu, the slide-over form
+                drawers, the command palette, the Overview tiles and first-run checklist — all drawn
+                from the state and forecast app.js already built
   guide.html    The built-in Getting Started guide (deliberately script-free)
   tests.html    Browser suite exercising engine.js and importers.js — open it, no build step, no runner to install
   sw.js         Offline shell (service worker), manifest.webmanifest, icon.svg
@@ -314,7 +323,7 @@ because a manual folder drop never consults `.gitignore`; keeping the shipping f
 that risk at the source instead of maintaining a blocklist.
 
 - Every script is a **classic script sharing global scope** — no ES modules, no imports, no bundler, so `file://` keeps working. They load in the order above; the later files extend the earlier ones by wrapping their render functions
-- [Chart.js](https://www.chartjs.org/) 4.4.4 and [SheetJS](https://sheetjs.com/) 0.20.3 are **vendored in `site/vendor/`** and loaded locally; notices in [`site/vendor/LICENSES.md`](site/vendor/LICENSES.md)
+- [Chart.js](https://www.chartjs.org/) 4.4.4, [SheetJS](https://sheetjs.com/) 0.20.3 and the [Inter](https://rsms.me/inter/) variable font are **vendored in `site/vendor/`** and loaded locally; notices in [`site/vendor/LICENSES.md`](site/vendor/LICENSES.md)
 - Netlify for static hosting (`netlify.toml` included, publishing `site/` with a CSP that forbids outbound connections)
 - No build step, no package manager, no `package.json`, no Node required
 
@@ -376,6 +385,7 @@ No build step and no dependencies to install — edit a file and refresh the bro
 | Bank-file parsers (CSV / OFX / QFX / QIF / camt.053) | `site/importers.js` |
 | Check-ins, per-account balances, plan-vs-actual, debt payoff, goals, calendar, scenarios | `site/features.js` |
 | Live workbook mode and encrypted export | `site/portability.js` |
+| Navigation rail, views, Data menu, drawers, command palette, Overview tiles, checklist | `site/shell.js` |
 | The Getting Started guide | `site/guide.html` |
 | Engine and importer tests | `site/tests.html` |
 

@@ -23,6 +23,16 @@
 <script src="vendor/xlsx.full.min.js"></script>
 <style>
 /* ===== Observation Deck design tokens (dark only) ===== */
+/* Inter, vendored (SIL OFL 1.1, notice in vendor/LICENSES.md). Served from this
+   folder like everything else — no font request ever leaves the origin. */
+@font-face {
+    font-family: "Inter";
+    src: url("vendor/InterVariable.woff2") format("woff2");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
 :root {
     color-scheme: dark;
 
@@ -45,6 +55,9 @@
     --accent-deep: #e8792b;
     --magenta: #c23e8c;
     --info: #5b8def;
+    --magenta-text: #e48ac0;   /* magenta lifted for small text on navy */
+    --magenta-tint: rgba(194, 62, 140, 0.14);
+    --topbar-h: 57px;          /* shell.js keeps this in step with the real bar */
 
     /* semantic */
     --live: #3ddc84;
@@ -60,7 +73,7 @@
     --down-tint: rgba(255, 107, 107, 0.14);
 
     /* type */
-    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", sans-serif;
+    --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
     --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 
     /* shape */
@@ -76,7 +89,7 @@ html { scroll-behavior: smooth; }
 body {
     font-family: var(--font-sans);
     margin: 0;
-    padding: 28px 20px 40px;
+    padding: 0;
     background: var(--bg);
     color: var(--text);
     line-height: 1.5;
@@ -145,23 +158,27 @@ a:focus-visible, button:focus-visible {
 }
 main:focus { outline: none; }
 
-.container {
-    max-width: 1240px;
-    margin: auto;
-}
-
-/* ── Header ── */
-header.app-head {
+/* ── App shell: top bar, navigation rail, views ──
+   The page is no longer one long scroll. A sticky bar carries the global
+   controls, a rail on the left switches between six views, and only the active
+   view is in the document flow. shell.js owns the switching; everything here is
+   layout and chrome. */
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 22px;
-    padding-bottom: 16px;
+    gap: 10px 16px;
+    padding: 10px 20px;
+    background: rgba(10, 13, 28, 0.84);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
     border-bottom: 1px solid var(--border);
 }
-.brand { display: flex; flex-direction: column; gap: 2px; }
+.brand { display: flex; flex-direction: column; gap: 0; min-width: 0; }
 a.kicker {
     font-family: var(--font-mono);
     font-size: 10px;
@@ -172,66 +189,824 @@ a.kicker {
 }
 a.kicker:hover { color: var(--accent); }
 h1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
     color: var(--text);
-    margin: 0;
-    font-size: 1.7rem;
+    font-size: 1.05rem;
     font-weight: 700;
-    letter-spacing: -0.5px;
+    letter-spacing: -0.2px;
+    white-space: nowrap;
 }
-.tagline {
-    margin: 0;
-    font-size: 13px;
-    color: var(--muted);
-    font-weight: 500;
-}
-.header-controls {
+.brand-mark { font-size: 1.2rem; line-height: 1; }
+
+.topbar-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    /* Bottom edges line up, so the labelled selects sit on the button row's baseline. */
-    align-items: flex-end;
-}
-.header-controls select,
-.header-controls button {
-    height: 36px;
-}
-/* Currency and horizon read as one labelled pair. The global select { width: 100% }
-   would otherwise stretch each of them across the whole control row and stack them. */
-.header-selects {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
+    align-items: center;
     gap: 8px;
     min-width: 0;
 }
+.topbar-actions button { height: 34px; }
+
+/* A labelled select reads as one control: mono kicker on the left, value on the right. */
 .header-field {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--bg-raised);
+    overflow: hidden;
+    transition: border-color 0.2s ease;
+}
+.header-field:hover, .header-field:focus-within { border-color: var(--border-hover); }
+.header-field label {
+    margin: 0;
+    padding: 0 9px 0 10px;
+    line-height: 32px;
+    border-right: 1px solid var(--border);
+    white-space: nowrap;
 }
 .header-field select {
     width: auto;
-    min-width: 112px;
-    max-width: 100%;
+    min-width: 0;
+    height: 32px;
+    padding: 0 26px 0 8px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 600;
 }
+.header-field select:focus { box-shadow: none; outline: none; }
 
-/* Status / error strips: must collapse completely while app.js leaves them empty. */
-#statusRegion {
-    flex-basis: 100%;
-    order: 99;
+/* Save state, export age and the restore button, written by app.js. */
+.status-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding-left: 4px;
 }
-#statusRegion:empty { display: none; }
-#statusRegion > * {
+.status-bar:empty { display: none; }
+.status-bar .muted-text {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+    white-space: nowrap;
+}
+.status-bar .danger-text { color: var(--down); }
+.status-bar button { height: 28px; padding: 3px 10px; font-size: 11.5px; }
+
+/* Active-scenario chip: every number on screen is being read through a what-if. */
+.scenario-chip:empty { display: none; }
+.scenario-chip {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 12px;
+    height: 34px;
+    padding: 0 4px 0 11px;
+    border: 1px solid var(--magenta);
+    border-radius: var(--radius-pill);
+    background: var(--magenta-tint);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--magenta-text);
+    max-width: 320px;
+}
+.scenario-chip .chip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+}
+.scenario-chip button { height: 26px; padding: 2px 9px; font-size: 11px; }
+
+/* Data menu — a native <details>, so it opens without script and closes with it. */
+.menu { position: relative; }
+.menu > summary {
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 12px;
     border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-control);
+    background: var(--bg-raised);
+    color: var(--text);
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.2s ease;
+}
+.menu > summary::-webkit-details-marker { display: none; }
+.menu > summary:hover, .menu[open] > summary { border-color: var(--border-hover); }
+.menu > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.menu-chev { font-size: 10px; color: var(--muted); transition: transform 0.2s ease; }
+.menu[open] .menu-chev { transform: rotate(180deg); }
+.menu-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 248px;
+    padding: 6px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow);
+}
+.menu-group {
+    padding: 8px 10px 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+}
+.menu-mount { display: contents; }
+.menu-panel button,
+.menu-panel .menu-link {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: auto;
+    padding: 8px 10px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text);
+    font-size: 13.5px;
+    font-weight: 500;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+.menu-panel button:hover,
+.menu-panel .menu-link:hover { background: var(--bg-raised); border-color: transparent; }
+.menu-panel button.danger-item { color: var(--down); }
+
+/* The rail and the content sit side by side; the rail stays put while the content scrolls. */
+.app {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    min-height: calc(100vh - var(--topbar-h));
+}
+.app-nav {
+    position: sticky;
+    top: var(--topbar-h);
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - var(--topbar-h));
+    padding: 14px 10px;
+    border-right: 1px solid var(--border);
+    background: rgba(12, 15, 38, 0.55);
+}
+.nav-list { display: flex; flex-direction: column; gap: 2px; }
+.nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.nav-ico {
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.9;
+}
+.nav-item:hover { background: var(--bg-raised); color: var(--text); border-color: transparent; }
+.nav-item:active { transform: none; }
+.nav-item[aria-current="page"] {
+    background: var(--tag-bg);
+    border-color: rgba(255, 154, 68, 0.32);
+    color: var(--tag-text);
+}
+.nav-item[aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    left: -10px;
+    top: 9px;
+    bottom: 9px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+}
+.nav-label { flex: 1 1 auto; min-width: 0; }
+.nav-badge {
+    padding: 1px 7px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    background: var(--card-chrome);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--faint);
+    white-space: nowrap;
+}
+.nav-badge:empty { display: none; }
+.nav-badge.on   { color: var(--magenta-text); border-color: var(--magenta); }
+.nav-badge.warn { color: var(--warn); border-color: rgba(255, 194, 75, 0.5); }
+.nav-kbd {
+    padding: 0 5px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 16px;
+    color: var(--faint);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.app-nav:hover .nav-kbd, .nav-item:focus-visible .nav-kbd { opacity: 1; }
+.nav-foot {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+.nav-item--small { padding: 7px 12px; font-size: 12.5px; font-weight: 500; }
+
+/* Views: one on screen at a time. The others stay laid out but invisible and
+   clipped to nothing, rather than display:none, so a chart rebuilt while its
+   view is off screen still measures a real width and comes back intact. Print
+   puts them all back. */
+main#main {
+    --main-pad: 24px;
+    position: relative;
+    min-width: 0;
+    max-width: 1440px;
+    padding: 22px var(--main-pad) 48px;
+}
+.view {
+    position: absolute;
+    top: 0;
+    left: var(--main-pad);
+    right: var(--main-pad);
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
+}
+.view.active {
+    position: static;
+    height: auto;
+    overflow: visible;
+    visibility: visible;
+    pointer-events: auto;
+    animation: view-in 0.22s ease;
+}
+@keyframes view-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+}
+.view-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px 16px;
+    margin: 2px 0 18px;
+}
+.view-title {
+    margin: 0;
+    color: var(--text);
+    font-size: 1.45rem;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+}
+.view-title:focus { outline: none; }
+.view-desc {
+    margin: 4px 0 0;
+    max-width: 72ch;
+    color: var(--muted);
+    font-size: 13.5px;
+}
+.view-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Overview: headline tiles rendered by shell.js. */
+.hero-card { padding: 16px 18px; }
+.hero-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 11px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    background: var(--bg-raised);
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.chip.ok   { color: var(--live); }
+.chip.ok .dot { background: var(--live); box-shadow: 0 0 8px var(--live); animation: deck-pulse 2.4s ease-in-out infinite; }
+.chip.warn { color: var(--warn); }
+.chip.warn .dot { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+.chip.down { color: var(--down); }
+.chip.down .dot { background: var(--down); box-shadow: 0 0 8px var(--down); }
+.chip.mag  { color: var(--magenta-text); border-color: var(--magenta); }
+.chip.mag .dot { background: var(--magenta); box-shadow: 0 0 8px var(--magenta); }
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+.kpi.wide { grid-column: span 2; }
+@media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px)  { .kpi-grid { grid-template-columns: minmax(0, 1fr); } .kpi.wide { grid-column: auto; } }
+.kpi {
+    display: block;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--info);
+    border-radius: var(--radius-control);
+    background: var(--bg-raised);
+    color: inherit;
+    text-decoration: none;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+a.kpi:hover { border-color: var(--border-hover); border-left-color: var(--accent); transform: translateY(-1px); }
+.kpi.pos  { border-left-color: var(--live); }
+.kpi.warn { border-left-color: var(--warn); }
+.kpi.neg  { border-left-color: var(--down); }
+.kpi.mag  { border-left-color: var(--magenta); }
+.kpi.acc  { border-left-color: var(--accent); }
+.kpi .label {
+    margin-bottom: 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+}
+.kpi .value {
+    font-size: 1.5rem;
+    font-weight: 650;
+    line-height: 1.15;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+.kpi .value.small { font-size: 1.15rem; }
+.kpi .sub { margin-top: 4px; font-size: 12px; color: var(--muted); }
+.kpi .delta { font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi .delta.up   { color: var(--live); }
+.kpi .delta.down { color: var(--down); }
+.hero-empty {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+.hero-empty h3 { margin: 0 0 4px; font-size: 1.1rem; color: var(--text); }
+.hero-empty p { margin: 0; max-width: 64ch; font-size: 13.5px; color: var(--muted); }
+.hero-empty .hero-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+a.btn {
+    display: inline-flex;
+    align-items: center;
+    height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--bg-raised);
+    color: var(--text);
+    font-size: 13.5px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+a.btn:hover { border-color: var(--border-hover); color: var(--text); }
+a.btn.primary { background: var(--accent); color: var(--btn-ink); border-color: var(--accent); }
+a.btn.primary:hover { background: var(--accent-deep); border-color: var(--accent-deep); }
+
+/* Toasts, bottom-right. app.js appends one element per message. */
+.toast-stack {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 120;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: max-content;
+    max-width: min(480px, calc(100vw - 36px));
+}
+.toast-stack:empty { display: none; }
+.toast-stack > * {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--info);
+    border-radius: var(--radius-control);
+    background: var(--card);
+    color: var(--text);
+    font-size: 13px;
+    box-shadow: var(--shadow);
+    animation: toast-in 0.2s ease;
+}
+.toast-stack > .positive { border-left-color: var(--live); }
+.toast-stack > .warning  { border-left-color: var(--warn); }
+.toast-stack > .danger   { border-left-color: var(--down); }
+.toast-stack .toast-msg  { flex: 1 1 200px; min-width: 0; }
+.toast-stack button { height: 28px; padding: 3px 9px; font-size: 12px; white-space: nowrap; }
+@keyframes toast-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* Under 900px the rail becomes a tab bar along the bottom edge. */
+@media (max-width: 899px) {
+    .app { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+    .app-nav {
+        position: fixed;
+        top: auto;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 50;
+        height: auto;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+        border-right: 0;
+        border-top: 1px solid var(--border);
+        background: rgba(10, 13, 28, 0.92);
+        -webkit-backdrop-filter: blur(14px);
+        backdrop-filter: blur(14px);
+    }
+    .nav-list { flex-direction: row; gap: 2px; }
+    .nav-item {
+        flex: 1 1 0;
+        flex-direction: column;
+        justify-content: center;
+        gap: 3px;
+        min-width: 0;
+        padding: 6px 2px;
+        font-size: 10.5px;
+        text-align: center;
+    }
+    .nav-label { flex: 0 0 auto; }
+    .nav-item[aria-current="page"]::before { display: none; }
+    .nav-badge, .nav-kbd, .nav-foot { display: none; }
+    main#main { --main-pad: 12px; padding: 14px var(--main-pad) calc(84px + env(safe-area-inset-bottom)); }
+    .topbar { padding: 8px 12px; gap: 8px 10px; }
+    .topbar-actions { width: 100%; }
+    .status-bar { flex-basis: 100%; padding-left: 0; }
+    .scenario-chip { max-width: 100%; }
+    .menu-panel { right: auto; left: 0; }
+    .view-title { font-size: 1.25rem; }
+    .toast-stack {
+        right: 10px;
+        bottom: calc(76px + env(safe-area-inset-bottom));
+        left: 10px;
+        width: auto;
+        max-width: none;
+    }
+}
+
+/* The hero card leaves the flow entirely while there is nothing to summarise. */
+#section-overview:has(> #overviewHero:empty) { display: none; }
+.kpi-spark { display: block; width: 100%; height: 44px; margin-top: 8px; }
+.kpi-spark .area { fill: var(--accent); opacity: 0.14; }
+.kpi-spark .line { fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linejoin: round; }
+.kpi-spark .zero { stroke: var(--down); stroke-width: 1; stroke-dasharray: 3 3; }
+.kpi-spark .end { fill: var(--accent); }
+
+/* Insight cards that lead somewhere. */
+.insight-card.linked { position: relative; cursor: pointer; padding-right: 30px; transition: transform 0.2s ease, border-color 0.2s ease; }
+.insight-card.linked:hover, .insight-card.linked:focus-visible { transform: translateY(-1px); border-color: var(--border-hover); }
+.insight-card.linked:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.insight-card.linked::after { content: "→"; position: absolute; right: 12px; top: 10px; font-size: 12px; color: var(--faint); }
+.insight-card.linked:hover::after { color: var(--accent); }
+
+/* ── Section header actions ── */
+.h2-actions { display: inline-flex; align-items: center; gap: 8px; }
+.section-add {
+    height: 30px;
+    padding: 4px 12px;
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+/* ── Slide-over drawers ── */
+.drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 88;
+    background: rgba(4, 6, 16, 0.55);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+}
+.drawer-backdrop[hidden] { display: none; }
+.drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    width: min(580px, 100vw);
+    background: var(--card);
+    border-left: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    transform: translateX(100%);
+    transition: transform 0.24s ease;
+}
+.drawer[hidden] { display: none; }
+.drawer.open { transform: none; }
+.drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card-chrome);
+}
+.drawer-head h3 { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text); }
+.drawer-body { flex: 1 1 auto; overflow-y: auto; padding: 18px 20px 24px; }
+.drawer-body .form-grid { margin-bottom: 0; }
+body.drawer-open { overflow: hidden; }
+@media (max-width: 600px) { .drawer { width: 100vw; border-left: 0; } }
+
+/* ── Row quick-action menu ── */
+.row-menu-btn { min-width: 34px; font-weight: 700; letter-spacing: 1px; }
+.row-menu-pop {
+    position: fixed;
+    z-index: 95;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 190px;
+    padding: 6px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow);
+}
+.row-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    height: auto;
+    padding: 8px 10px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text);
+    font-size: 13.5px;
+    font-weight: 500;
+    text-align: left;
+}
+.row-menu-item:hover, .row-menu-item:focus-visible { background: var(--bg-raised); border-color: transparent; }
+.row-menu-item.danger-item { color: var(--down); }
+.row-menu-ico { width: 18px; text-align: center; color: var(--muted); }
+
+/* ── Selection and inline editing ── */
+th.sel, td.sel { width: 34px; padding-right: 2px; }
+th.sel input, td.sel input { width: 16px; height: 16px; margin: 0; vertical-align: middle; cursor: pointer; accent-color: var(--accent); }
+tr.paused-row td { opacity: 0.55; }
+tr.paused-row td.sel, tr.paused-row td.row-actions { opacity: 1; }
+tr.selected td { background: var(--tag-bg); }
+td.editable { cursor: text; border-radius: 4px; }
+td.editable:hover { box-shadow: inset 0 0 0 1px var(--border-hover); }
+td.editable:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+td.editable.editing { padding: 3px 6px; }
+.inline-edit { width: 100%; min-width: 100px; height: 30px; padding: 4px 8px; font-size: 13px; }
+td.num .inline-edit { text-align: right; font-family: var(--font-mono); }
+.bulk-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 154, 68, 0.35);
+    border-radius: var(--radius-control);
+    background: var(--tag-bg);
+}
+.bulk-bar > span {
+    margin-right: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tag-text);
+}
+.bulk-bar button { height: 30px; padding: 4px 10px; font-size: 12.5px; }
+.bulk-bar .danger-item { color: var(--down); }
+
+/* ── Command palette ── */
+.palette-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 200px;
+    height: 34px;
+    padding: 0 8px 0 10px;
+    border: 1px solid var(--border);
     border-radius: var(--radius-control);
     background: var(--bg-raised);
     color: var(--muted);
-    font-size: 12.5px;
+    font-size: 13px;
+    font-weight: 500;
+}
+.palette-btn:hover { border-color: var(--border-hover); color: var(--text); }
+.palette-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.palette-btn kbd {
+    margin-left: auto;
+    padding: 0 5px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 16px;
+    color: var(--faint);
+}
+.palette-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 12vh 16px 16px;
+    background: rgba(4, 6, 16, 0.6);
+}
+.palette-overlay[hidden] { display: none; }
+.palette {
+    display: flex;
+    flex-direction: column;
+    width: min(640px, 100%);
+    max-height: 70vh;
+    overflow: hidden;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow);
+}
+.palette-input { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.palette-input input { padding: 10px 8px; border: 0; background: transparent; font-size: 16px; }
+.palette-input input:focus { box-shadow: none; }
+.palette-list { flex: 1 1 auto; margin: 0; padding: 6px; overflow-y: auto; list-style: none; }
+.palette-group {
+    padding: 8px 10px 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+}
+.palette-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-control);
+    color: var(--text);
+    font-size: 13.5px;
+    cursor: pointer;
+}
+.palette-item[aria-selected="true"], .palette-item:hover { background: var(--tag-bg); color: var(--tag-text); }
+.palette-item.danger-item { color: var(--down); }
+.palette-item .pi-ico { width: 20px; text-align: center; font-size: 13px; color: var(--muted); }
+.palette-item .pi-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-item .pi-hint {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--faint);
+    white-space: nowrap;
+}
+.palette-empty { padding: 18px; text-align: center; color: var(--muted); font-size: 13.5px; }
+.palette-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--faint);
+}
+
+/* ── First-run checklist ── */
+.onboarding {
+    margin-bottom: 18px;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: var(--radius-card);
+    background: linear-gradient(135deg, rgba(255, 154, 68, 0.10), rgba(194, 62, 140, 0.08));
+}
+.onboarding[hidden] { display: none; }
+.onb-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.onb-head h3 { margin: 0; font-size: 1.05rem; color: var(--text); }
+.onb-head p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.onb-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.onb-progress .v5-bar { width: 120px; }
+.onb-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.onb-step { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-raised); }
+.onb-step.done { opacity: 0.72; }
+.onb-num {
+    flex: 0 0 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 26px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+}
+.onb-step.done .onb-num { background: var(--live); border-color: var(--live); color: var(--btn-ink); }
+.onb-step.next .onb-num { background: var(--accent); border-color: var(--accent); color: var(--btn-ink); }
+.onb-step strong { display: block; margin-bottom: 2px; font-size: 13.5px; color: var(--text); }
+.onb-step p { margin: 0 0 8px; font-size: 12.5px; color: var(--muted); }
+.onb-step button { height: 30px; padding: 4px 12px; font-size: 12.5px; }
+.onb-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+button.link { height: auto; padding: 0; border: 0; background: none; color: var(--accent); font-size: 12.5px; font-weight: 600; }
+button.link:hover { text-decoration: underline; }
+
+@media (max-width: 899px) {
+    .palette-btn { min-width: 0; flex: 1 1 100%; order: -1; }
+    .palette-btn kbd { display: none; }
+    .h2-actions { flex-wrap: wrap; }
+}
+
+/* Larger phones and tablets keep the topbar selects compact. */
+@media (max-width: 480px) {
+    .header-field label { display: none; }
+    .brand-mark { display: none; }
 }
 
 #globalError:empty,
@@ -724,13 +1499,6 @@ footer.app-foot a:hover { color: var(--accent-deep); text-decoration: underline;
 /* ── Responsive ── */
 @media (max-width: 700px) {
     body { padding: 12px 10px; }
-    header.app-head { flex-direction: column; align-items: flex-start; }
-    h1 { font-size: 1.4rem; }
-    .header-controls { width: 100%; justify-content: flex-start; }
-    /* Still side by side on a phone, now sharing the row evenly. */
-    .header-selects { width: 100%; }
-    .header-field { flex: 1 1 0; }
-    .header-field select { width: 100%; min-width: 0; }
     .charts-grid { grid-template-columns: minmax(0, 1fr); }
     .chart-card { padding: 12px 12px; }
     .chart-card canvas { min-height: 210px; max-height: 260px; }
@@ -826,8 +1594,13 @@ footer.app-foot a:hover { color: var(--accent-deep); text-decoration: underline;
     body::before { display: none; }
 
     .skip-link,
-    .header-controls,
-    .intro-banner,
+    .topbar-actions,
+    .app-nav,
+    .view-head,
+    .toast-stack,
+    .onboarding,
+    .drawer, .drawer-backdrop,
+    .bulk-bar, td.sel, th.sel,
     #statusRegion,
     #dataWarnings,
     form,
@@ -846,7 +1619,11 @@ footer.app-foot a:hover { color: var(--accent-deep); text-decoration: underline;
     }
     .panel-note { color: #333333; }
 
-    header.app-head { border-bottom: 1px solid #b4b4b4; }
+    .topbar { position: static; background: #ffffff; border-bottom: 1px solid #b4b4b4; backdrop-filter: none; }
+    .app { display: block; }
+    /* Every view goes to paper, not just the one on screen. */
+    .view { position: static !important; height: auto !important; overflow: visible !important; visibility: visible !important; animation: none; }
+    main#main { padding: 0; }
     section.card {
         box-shadow: none;
         border: 1px solid #b4b4b4;
@@ -885,35 +1662,6 @@ footer.app-foot a:hover { color: var(--accent-deep); text-decoration: underline;
 
 .hidden { display: none !important; }
 
-/* ── Empty-state intro banner ── */
-.intro-banner {
-    display: flex;
-    gap: 18px;
-    align-items: center;
-    background: linear-gradient(135deg, rgba(255,154,68,0.10), rgba(194,62,140,0.08));
-    border: 1px solid var(--border);
-    border-left: 4px solid var(--accent);
-    border-radius: var(--radius-card);
-    padding: 16px 20px;
-    margin-bottom: 18px;
-}
-.intro-banner h3 {
-    margin: 0 0 8px;
-    color: var(--accent);
-    font-size: 1.05rem;
-}
-.intro-banner p { margin: 0 0 6px; font-size: 13.5px; }
-.intro-banner p:last-child { margin-bottom: 0; }
-.intro-banner ol { margin: 6px 0 8px 18px; padding: 0; font-size: 13.5px; }
-.intro-banner ol li { margin-bottom: 2px; }
-.intro-banner .intro-text { flex: 1; min-width: 0; }
-.intro-banner .intro-actions { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
-@media (max-width: 700px) {
-    .intro-banner { flex-direction: column; align-items: stretch; }
-    .intro-banner .intro-actions { flex-direction: row; }
-}
-a.guide-link { color: var(--accent); font-size: 12px; font-weight: 600; text-decoration: none; opacity: 0.9; white-space: nowrap; }
-a.guide-link:hover { text-decoration: underline; opacity: 1; }
 .danger-text { color: var(--down); }
 .success-text { color: var(--live); }
 .muted-text { color: var(--muted); font-size: 12px; }
@@ -922,50 +1670,79 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
-<div class="container">
 
-<header class="app-head">
+<header class="topbar">
     <div class="brand">
-        <a class="kicker" href="https://observation-deck.netlify.app/">Observation Deck / Cashflow Compass</a>
-        <h1>🧭 Cashflow Compass</h1>
-        <p class="tagline">Navigate your cashflow — up to 36 months out <span style="white-space:nowrap">&nbsp;|&nbsp;<a href="guide.html" class="guide-link">How to get Started →</a></span></p>
+        <a class="kicker" href="https://observation-deck.netlify.app/">Observation Deck</a>
+        <h1><span class="brand-mark" aria-hidden="true">🧭</span>Cashflow Compass</h1>
     </div>
-    <div class="header-controls">
-        <div class="header-selects">
-            <div class="header-field">
-                <label for="currencySelect">Currency</label>
-                <select id="currencySelect" title="Currency">
-                    <option value="USD">$ USD</option>
-                    <option value="EUR">€ EUR</option>
-                    <option value="GBP">£ GBP</option>
-                    <option value="CAD">$ CAD</option>
-                    <option value="AUD">$ AUD</option>
-                    <option value="JPY">¥ JPY</option>
-                </select>
-            </div>
-            <div class="header-field">
-                <label for="horizonSelect">Forecast horizon</label>
-                <select id="horizonSelect" title="Forecast horizon">
-                    <option value="eoy">End of Year</option>
-                    <option value="12">12 months</option>
-                    <option value="18">18 months</option>
-                    <option value="24">24 months</option>
-                    <option value="36">36 months</option>
-                </select>
-            </div>
+    <div class="topbar-actions">
+        <button type="button" id="paletteBtn" class="palette-btn" title="Search and commands">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <span>Search or jump to…</span>
+            <kbd id="paletteKbd" aria-hidden="true">⌘K</kbd>
+        </button>
+        <div class="header-field">
+            <label for="horizonSelect">Horizon</label>
+            <select id="horizonSelect" title="Forecast horizon">
+                <option value="eoy">End of Year</option>
+                <option value="12">12 months</option>
+                <option value="18">18 months</option>
+                <option value="24">24 months</option>
+                <option value="36">36 months</option>
+            </select>
         </div>
-        <button id="exportXlsxBtn" class="primary">⬇ Excel</button>
-        <button id="importXlsxBtn">⬆ Excel</button>
-        <!-- Mount for the bank-file import control. -->
-        <span id="panelImportMount"></span>
-        <button id="exportJsonBtn" class="ghost" title="Export JSON">{ JSON }</button>
-        <button id="importJsonBtn" class="ghost" title="Import JSON">⇪ JSON</button>
-        <button id="loadSampleBtn" type="button" class="ghost load-sample">Load sample data</button>
-        <button id="resetBtn" class="ghost icon danger" title="Reset all">🗑</button>
+        <div class="header-field">
+            <label for="currencySelect">Currency</label>
+            <select id="currencySelect" title="Currency">
+                <option value="USD">$ USD</option>
+                <option value="EUR">€ EUR</option>
+                <option value="GBP">£ GBP</option>
+                <option value="CAD">$ CAD</option>
+                <option value="AUD">$ AUD</option>
+                <option value="JPY">¥ JPY</option>
+            </select>
+        </div>
+        <!-- shell.js fills this while a scenario is active; :empty keeps it out of the flow otherwise. -->
+        <span id="scenarioChip" class="scenario-chip"></span>
+        <button id="exportXlsxBtn" class="primary" title="Export an Excel workbook (E)">⬇ Export</button>
+        <details class="menu" id="dataMenu">
+            <summary class="menu-btn">Data <span class="menu-chev" aria-hidden="true">▾</span></summary>
+            <div class="menu-panel">
+                <div class="menu-group">Bring data in</div>
+                <button id="importXlsxBtn" type="button">⬆ Import Excel workbook</button>
+                <button id="importJsonBtn" type="button" title="Import JSON">⇪ Import JSON file</button>
+                <!-- Mount for the bank-file import control (importers.js). -->
+                <span id="panelImportMount" class="menu-mount"></span>
+                <div class="menu-group">More</div>
+                <button id="exportJsonBtn" type="button" class="ghost" title="Export JSON">{ } Export JSON</button>
+                <button id="loadSampleBtn" type="button" class="ghost load-sample">Load sample data</button>
+                <a class="menu-link" href="guide.html">Getting Started guide</a>
+                <button id="resetBtn" type="button" class="ghost danger-item" title="Reset all">🗑 Reset everything</button>
+            </div>
+        </details>
+        <!-- app.js fills this with the save indicator, export age and the restore-backup button. -->
+        <div id="appStatusBar" class="status-bar"></div>
         <input type="file" id="fileInput" accept=".xlsx,.xls,.json" class="hidden">
-        <div id="statusRegion" aria-live="polite" role="status"></div>
     </div>
 </header>
+
+<div class="app">
+
+<nav class="app-nav" aria-label="Views">
+    <div class="nav-list">
+        <a class="nav-item" href="#/overview" data-view="overview"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M15 9l-2 5-5 2 2-5z"/></svg><span class="nav-label">Overview</span><kbd class="nav-kbd" aria-hidden="true">1</kbd></a>
+        <a class="nav-item" href="#/plan" data-view="plan"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg><span class="nav-label">Plan</span><span class="nav-badge" id="navBadgePlan"></span><kbd class="nav-kbd" aria-hidden="true">2</kbd></a>
+        <a class="nav-item" href="#/forecast" data-view="forecast"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="nav-label">Forecast</span><kbd class="nav-kbd" aria-hidden="true">3</kbd></a>
+        <a class="nav-item" href="#/reality" data-view="reality"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg><span class="nav-label">Reality</span><span class="nav-badge" id="navBadgeReality"></span><kbd class="nav-kbd" aria-hidden="true">4</kbd></a>
+        <a class="nav-item" href="#/planning" data-view="planning"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></svg><span class="nav-label">Planning</span><span class="nav-badge" id="navBadgePlanning"></span><kbd class="nav-kbd" aria-hidden="true">5</kbd></a>
+        <a class="nav-item" href="#/backup" data-view="backup"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span class="nav-label">Backup</span><span class="nav-badge" id="navBadgeBackup"></span><kbd class="nav-kbd" aria-hidden="true">6</kbd></a>
+    </div>
+    <div class="nav-foot">
+        <a class="nav-item nav-item--small" href="guide.html"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h6a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4z"/><path d="M20 4h-6a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h7z"/></svg><span class="nav-label">Getting Started</span></a>
+        <button class="nav-item nav-item--small" type="button" id="shortcutsBtn"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="7" width="18" height="11" rx="2"/><path d="M7 11h.01M11 11h.01M15 11h.01M8 15h8"/></svg><span class="nav-label">Shortcuts</span><kbd class="nav-kbd" aria-hidden="true">?</kbd></button>
+    </div>
+</nav>
 
 <main id="main" tabindex="-1">
 
@@ -980,28 +1757,359 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <!-- Fatal-error banner; app.js fills it, and :empty keeps it out of the flow otherwise. -->
 <div id="globalError"></div>
 
-<!-- Empty-state intro banner (shown only when no accounts and no transactions) -->
-<div class="intro-banner hidden" id="introBanner">
-    <div class="intro-text">
-        <h3>Welcome to Cashflow Compass</h3>
-        <p>This app forecasts your money up to 36 months ahead. Tell it your accounts, paycheck, and recurring expenses — it shows the month-by-month picture, where every dollar goes, and how long until things get tight.</p>
-        <ol>
-            <li>Add an <strong>account</strong> with its current balance</li>
-            <li>Add your recurring <strong>transactions</strong> — paycheck (bi-weekly works), rent, subscriptions, etc.</li>
-            <li>Pick how far to look ahead at the top right (End of Year through 36 months)</li>
-        </ol>
-        <p class="muted-text">All data stays in your browser. Export to Excel any time as a portable backup.</p>
+<!-- Data-quality warning strip; app.js fills it, :empty keeps it out of the flow otherwise. -->
+<div id="dataWarnings"></div>
+
+<div class="view" data-view="overview" id="view-overview">
+    <div class="view-head">
+        <div>
+            <h2 class="view-title" tabindex="-1">Overview</h2>
+            <p class="view-desc">Where the money stands today, where the plan takes it, and what to keep an eye on.</p>
+        </div>
     </div>
-    <div class="intro-actions">
-        <button class="primary load-sample" type="button" id="introLoadSampleBtn">Load sample data</button>
-        <button class="ghost" type="button" id="dismissIntroBtn">Hide</button>
+
+<!-- First-run checklist; shell.js fills it and hides it once the plan has the basics. -->
+<div id="onboarding" class="onboarding" hidden></div>
+
+<!-- Headline numbers; shell.js renders them from the forecast app.js built. -->
+<section class="card hero-card" id="section-overview" aria-labelledby="overviewTitle">
+    <h2 id="overviewTitle" class="visually-hidden">Headline numbers</h2>
+    <div id="overviewHero"></div>
+</section>
+
+<!-- Charts -->
+<section class="card" id="section-charts">
+    <h2>
+        <span>Visualizations</span>
+        <button class="ghost icon" type="button" id="chartsToggle" aria-label="Toggle visualizations section" aria-expanded="true" aria-controls="chartsGrid"><span class="visually-hidden">Toggle visualizations section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
+    </h2>
+    <div class="charts-grid" id="chartsGrid">
+        <div class="chart-card" data-chart-card="monthly">
+            <div class="chart-head">
+                <h3>Monthly Income vs Expenses<span class="h-range" id="range-monthly"></span></h3>
+                <label class="visually-hidden" for="horizon-monthly">Horizon for Monthly Income vs Expenses</label>
+                <select class="chart-horizon" id="horizon-monthly" data-chart="monthly"></select>
+            </div>
+            <canvas id="chartMonthly" role="img" aria-label="Bar chart of forecast income against expenses for each month in the selected horizon."></canvas>
+        </div>
+        <div class="chart-card" data-chart-card="balance">
+            <div class="chart-head">
+                <h3>Running Balance<span class="h-range" id="range-balance"></span></h3>
+                <label class="visually-hidden" for="horizon-balance">Horizon for Running Balance</label>
+                <select class="chart-horizon" id="horizon-balance" data-chart="balance"></select>
+            </div>
+            <canvas id="chartBalance" role="img" aria-label="Line chart of the projected combined account balance at the end of each month."></canvas>
+        </div>
+        <div class="chart-card" data-chart-card="category">
+            <div class="chart-head">
+                <h3>Spend by Category<span class="h-range" id="range-category"></span></h3>
+                <label class="visually-hidden" for="horizon-category">Horizon for Spend by Category</label>
+                <select class="chart-horizon" id="horizon-category" data-chart="category"></select>
+            </div>
+            <canvas id="chartCategory" role="img" aria-label="Doughnut chart showing the share of total forecast spending taken by each expense category."></canvas>
+        </div>
+        <div class="chart-card" data-chart-card="trend">
+            <div class="chart-head">
+                <h3>Category Trend (stacked)<span class="h-range" id="range-trend"></span></h3>
+                <label class="visually-hidden" for="horizon-trend">Horizon for Category Trend</label>
+                <select class="chart-horizon" id="horizon-trend" data-chart="trend"></select>
+            </div>
+            <canvas id="chartTrend" role="img" aria-label="Stacked area chart of spending per category month by month across the selected horizon."></canvas>
+        </div>
+        <div class="chart-card" data-chart-card="top">
+            <div class="chart-head">
+                <h3>Top 10 Costs<span class="h-range" id="range-top"></span></h3>
+                <label class="visually-hidden" for="horizon-top">Horizon for Top 10 Costs</label>
+                <select class="chart-horizon" id="horizon-top" data-chart="top"></select>
+            </div>
+            <canvas id="chartTop" role="img" aria-label="Horizontal bar chart ranking the ten most expensive recurring transactions over the selected horizon."></canvas>
+        </div>
+        <div class="chart-card" data-chart-card="income">
+            <div class="chart-head">
+                <h3>Income Sources<span class="h-range" id="range-income"></span></h3>
+                <label class="visually-hidden" for="horizon-income">Horizon for Income Sources</label>
+                <select class="chart-horizon" id="horizon-income" data-chart="income"></select>
+            </div>
+            <canvas id="chartIncome" role="img" aria-label="Doughnut chart showing the share of total forecast income contributed by each income source."></canvas>
+        </div>
     </div>
+</section>
+
+<!-- Insights -->
+<section class="card" id="section-insights">
+    <h2>Interesting Facts &amp; Insights</h2>
+    <div class="insights-grid" id="insightsGrid"></div>
+</section>
 </div>
+
+<div class="view" data-view="plan" id="view-plan">
+    <div class="view-head">
+        <div>
+            <h2 class="view-title" tabindex="-1">Plan</h2>
+            <p class="view-desc">The accounts, categories and recurring transactions the whole forecast is built from.</p>
+        </div>
+    </div>
 
 <!-- Accounts -->
 <section class="card" id="section-accounts">
-    <h2>Accounts <span class="section-meta" id="accountsMeta"></span></h2>
-    <form id="accountForm" class="form-grid">
+    <h2>
+        <span>Accounts <span class="section-meta" id="accountsMeta"></span></span>
+        <button type="button" class="primary section-add" data-drawer="account">＋ Add account</button>
+    </h2>
+        <div class="table-wrap">
+        <table id="accountsTable">
+            <thead>
+                <tr>
+                    <th>Name</th><th>Type</th>
+                    <th class="num">Starting Balance</th>
+                    <th>As Of</th>
+                    <th class="num">Actions</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</section>
+
+<!-- Categories -->
+<section class="card" id="section-categories">
+    <h2>
+        <span>Categories</span>
+        <span class="h2-actions">
+        <button type="button" class="primary section-add" data-drawer="category">＋ Add category</button>
+        <button class="ghost icon" type="button" id="catToggle" aria-label="Toggle categories section" aria-expanded="true" aria-controls="catBody"><span class="visually-hidden">Toggle categories section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
+        </span>
+    </h2>
+    <div id="catBody">
+                <div class="table-wrap">
+            <table id="categoriesTable">
+                <thead><tr id="categoriesHeaderRow"></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- Transactions -->
+<section class="card" id="section-transactions">
+    <h2>
+        <span>Transactions <span class="section-meta" id="txMeta"></span></span>
+        <span class="h2-actions">
+        <button type="button" class="primary section-add" data-drawer="transaction">＋ Add transaction</button>
+        <button class="ghost icon" type="button" id="txToggle" aria-label="Toggle transactions section" aria-expanded="true" aria-controls="txBody"><span class="visually-hidden">Toggle transactions section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
+        </span>
+    </h2>
+    <div id="txBody">
+    
+    <div class="form-grid">
+        <div>
+            <label for="txSearch">Search</label>
+            <input type="text" id="txSearch" placeholder="Filter by name, tag, notes…">
+        </div>
+        <div>
+            <label for="txFilterKind">Filter by Kind</label>
+            <select id="txFilterKind">
+                <option value="">All</option>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+                <option value="transfer">Transfer</option>
+            </select>
+        </div>
+        <div>
+            <label for="txFilterCategory">Filter by Category</label>
+            <select id="txFilterCategory"><option value="">All</option></select>
+        </div>
+    </div>
+
+    <!-- Appears while any row is ticked. -->
+    <div id="txBulkBar" class="bulk-bar hidden" role="region" aria-label="Selected transactions">
+        <span id="txBulkCount"></span>
+        <button type="button" id="txBulkPause">⏸ Pause</button>
+        <button type="button" id="txBulkResume">▶ Resume</button>
+        <button type="button" id="txBulkDelete" class="danger-item">✕ Delete</button>
+        <button type="button" id="txBulkClear" class="ghost">Clear selection</button>
+    </div>
+    <div class="table-wrap">
+        <table id="txTable">
+            <thead><tr id="txHeaderRow"></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    </div>
+</section>
+</div>
+
+<div class="view" data-view="forecast" id="view-forecast">
+    <div class="view-head">
+        <div>
+            <h2 class="view-title" tabindex="-1">Forecast</h2>
+            <p class="view-desc">The plan projected forward — month by month, account by account, and day by day.</p>
+        </div>
+    </div>
+
+<!-- Forecast -->
+<section class="card" id="section-forecast">
+    <h2>
+        <span><span id="forecastTitle">12-Month Forecast</span> <span class="section-meta" id="forecastMeta"></span></span>
+        <button class="ghost icon" type="button" id="forecastToggle" aria-label="Toggle forecast section" aria-expanded="true" aria-controls="forecastBody"><span class="visually-hidden">Toggle forecast section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
+    </h2>
+    <div id="forecastBody">
+        <div class="forecast-wrap">
+            <table id="forecastTable">
+                <thead><tr id="forecastHeaderRow"></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- Balances by account -->
+<section class="card" id="section-balances">
+    <h2>
+        <span>Balances by Account</span>
+        <button class="ghost icon" type="button" id="balancesToggle" aria-label="Toggle balances by account section" aria-expanded="true" aria-controls="balancesBody"><span class="visually-hidden">Toggle balances by account section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
+    </h2>
+    <div class="panel-body" id="balancesBody">
+        <p class="panel-note">Where your money actually sits — the projected end-of-month balance for each account, instead of one combined total.</p>
+        <div class="panel-mount" id="panelAccounts"></div>
+    </div>
+</section>
+
+<!-- Bills calendar -->
+<section class="card" id="section-calendar">
+    <h2>
+        <span>Bills Calendar</span>
+        <button class="ghost icon" type="button" id="calendarToggle" aria-label="Toggle bills calendar section" aria-expanded="true" aria-controls="calendarBody"><span class="visually-hidden">Toggle bills calendar section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
+    </h2>
+    <div class="panel-body" id="calendarBody">
+        <p class="panel-note">A day-by-day view of what lands when, so you can spot the crowded weeks before they arrive.</p>
+        <div class="panel-mount" id="panelCalendar"></div>
+    </div>
+</section>
+</div>
+
+<div class="view" data-view="reality" id="view-reality">
+    <div class="view-head">
+        <div>
+            <h2 class="view-title" tabindex="-1">Reality</h2>
+            <p class="view-desc">Check the plan against what your accounts really hold and what your bank recorded. Nothing here connects to a bank — you open a file you downloaded yourself.</p>
+        </div>
+        <div class="view-actions"><button type="button" id="realityImportBtn" class="hidden">↑ Import a bank file</button></div>
+    </div>
+
+<!-- Monthly check-in -->
+<section class="card" id="section-checkin">
+    <h2>
+        <span>Monthly Check-in</span>
+        <button class="ghost icon" type="button" id="checkinToggle" aria-label="Toggle monthly check-in section" aria-expanded="true" aria-controls="checkinBody"><span class="visually-hidden">Toggle monthly check-in section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
+    </h2>
+    <div class="panel-body" id="checkinBody">
+        <p class="panel-note">Record what an account really held at the end of a month, so the forecast keeps starting from a true balance.</p>
+        <div class="panel-mount" id="panelCheckin"></div>
+    </div>
+</section>
+
+<!-- Plan vs actual -->
+<section class="card" id="section-variance">
+    <h2>
+        <span>Plan vs Actual</span>
+        <button class="ghost icon" type="button" id="varianceToggle" aria-label="Toggle plan versus actual section" aria-expanded="true" aria-controls="varianceBody"><span class="visually-hidden">Toggle plan versus actual section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
+    </h2>
+    <div class="panel-body" id="varianceBody">
+        <p class="panel-note">Sets what you planned to spend against what you checked in, so you can see where the forecast drifts.</p>
+        <div class="panel-mount" id="panelVariance"></div>
+    </div>
+</section>
+</div>
+
+<div class="view" data-view="planning" id="view-planning">
+    <div class="view-head">
+        <div>
+            <h2 class="view-title" tabindex="-1">Planning</h2>
+            <p class="view-desc">Pay down debt, fund goals, and try what-ifs without touching the base plan.</p>
+        </div>
+    </div>
+
+<!-- Debt payoff -->
+<section class="card" id="section-debt">
+    <h2>
+        <span>Debt Payoff</span>
+        <button class="ghost icon" type="button" id="debtToggle" aria-label="Toggle debt payoff section" aria-expanded="true" aria-controls="debtBody"><span class="visually-hidden">Toggle debt payoff section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
+    </h2>
+    <div class="panel-body" id="debtBody">
+        <p class="panel-note">How long each balance takes to clear at the payment you are making now, and what the interest costs along the way.</p>
+        <div class="panel-mount" id="panelDebt"></div>
+    </div>
+</section>
+
+<!-- Savings goals -->
+<section class="card" id="section-goals">
+    <h2>
+        <span>Savings Goals</span>
+        <button class="ghost icon" type="button" id="goalsToggle" aria-label="Toggle savings goals section" aria-expanded="true" aria-controls="goalsBody"><span class="visually-hidden">Toggle savings goals section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
+    </h2>
+    <div class="panel-body" id="goalsBody">
+        <p class="panel-note">Set an amount you are saving towards and see the date you reach it at your current pace.</p>
+        <div class="panel-mount" id="panelGoals"></div>
+    </div>
+</section>
+
+<!-- Scenarios -->
+<section class="card" id="section-scenarios">
+    <h2>
+        <span>Scenarios</span>
+        <button class="ghost icon" type="button" id="scenariosToggle" aria-label="Toggle scenarios section" aria-expanded="true" aria-controls="scenariosBody"><span class="visually-hidden">Toggle scenarios section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
+    </h2>
+    <div class="panel-body" id="scenariosBody">
+        <p class="panel-note">Try a what-if — a raise, a rent rise, one bill gone — and compare it against your real numbers without changing them.</p>
+        <div class="panel-mount" id="panelScenarios"></div>
+    </div>
+</section>
+</div>
+
+<div class="view" data-view="backup" id="view-backup">
+    <div class="view-head">
+        <div>
+            <h2 class="view-title" tabindex="-1">Backup</h2>
+            <p class="view-desc">Save a full copy of your data, bring one back, or connect a live file. Nothing leaves your machine.</p>
+        </div>
+    </div>
+
+<!-- Backup and portability -->
+<section class="card" id="section-portability">
+    <h2>
+        <span>Backup &amp; Portability</span>
+        <button class="ghost icon" type="button" id="portabilityToggle" aria-label="Toggle backup and portability section" aria-expanded="true" aria-controls="portabilityBody"><span class="visually-hidden">Toggle backup and portability section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
+    </h2>
+    <div class="panel-body" id="portabilityBody">
+        <p class="panel-note">Save a full copy of your data, bring one back, or carry it to another browser or device. Nothing leaves your machine.</p>
+        <div class="panel-mount" id="panelPortability"></div>
+    </div>
+</section>
+</div>
+
+<footer class="app-foot">
+    <p>
+        <a href="https://observation-deck.netlify.app/">Observation Deck</a>
+        &nbsp;·&nbsp;
+        <a href="https://github.com/00xJS/cashflow-compass" target="_blank" rel="noopener">GitHub</a>
+    </p>
+</footer>
+
+</main>
+
+</div>
+
+<!-- Slide-over forms. app.js addresses every field by id exactly as before; shell.js
+     opens a panel from the ＋ Add buttons and the row menus, and closes it on save. -->
+<div id="drawerBackdrop" class="drawer-backdrop" hidden></div>
+<aside class="drawer" id="drawer-account" role="dialog" aria-modal="true" aria-labelledby="drawerAccountTitle" hidden>
+    <div class="drawer-head">
+        <h3 id="drawerAccountTitle">Add Account</h3>
+        <button type="button" class="ghost icon" data-drawer-close aria-label="Close">✕</button>
+    </div>
+    <div class="drawer-body">
+<form id="accountForm" class="form-grid">
         <div>
             <label for="acctName">Name</label>
             <input type="text" id="acctName" placeholder="e.g., Chase Checking" aria-describedby="acctNameError" required>
@@ -1045,29 +2153,15 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
             <button type="submit" class="primary" id="acctSubmitBtn">Add Account</button>
         </div>
     </form>
-    <div class="table-wrap">
-        <table id="accountsTable">
-            <thead>
-                <tr>
-                    <th>Name</th><th>Type</th>
-                    <th class="num">Starting Balance</th>
-                    <th>As Of</th>
-                    <th class="num">Actions</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
     </div>
-</section>
-
-<!-- Categories -->
-<section class="card" id="section-categories">
-    <h2>
-        Categories
-        <button class="ghost icon" type="button" id="catToggle" aria-label="Toggle categories section" aria-expanded="true" aria-controls="catBody"><span class="visually-hidden">Toggle categories section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
-    </h2>
-    <div id="catBody">
-        <form id="categoryForm" class="form-grid">
+</aside>
+<aside class="drawer" id="drawer-category" role="dialog" aria-modal="true" aria-labelledby="drawerCategoryTitle" hidden>
+    <div class="drawer-head">
+        <h3 id="drawerCategoryTitle">Add Category</h3>
+        <button type="button" class="ghost icon" data-drawer-close aria-label="Close">✕</button>
+    </div>
+    <div class="drawer-body">
+<form id="categoryForm" class="form-grid">
             <div>
                 <label for="catName">Name</label>
                 <input type="text" id="catName" placeholder="e.g., Groceries" aria-describedby="catNameError" required>
@@ -1095,23 +2189,15 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
                 <button type="submit" class="primary" id="catSubmitBtn">Add Category</button>
             </div>
         </form>
-        <div class="table-wrap">
-            <table id="categoriesTable">
-                <thead><tr id="categoriesHeaderRow"></tr></thead>
-                <tbody></tbody>
-            </table>
-        </div>
     </div>
-</section>
-
-<!-- Transactions -->
-<section class="card" id="section-transactions">
-    <h2>
-        <span>Transactions <span class="section-meta" id="txMeta"></span></span>
-        <button class="ghost icon" type="button" id="txToggle" aria-label="Toggle transactions section" aria-expanded="true" aria-controls="txBody"><span class="visually-hidden">Toggle transactions section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
-    </h2>
-    <div id="txBody">
-    <form id="txForm" class="form-grid">
+</aside>
+<aside class="drawer" id="drawer-transaction" role="dialog" aria-modal="true" aria-labelledby="drawerTransactionTitle" hidden>
+    <div class="drawer-head">
+        <h3 id="drawerTransactionTitle">Add Transaction</h3>
+        <button type="button" class="ghost icon" data-drawer-close aria-label="Close">✕</button>
+    </div>
+    <div class="drawer-body">
+<form id="txForm" class="form-grid">
         <div>
             <label for="txName">Name</label>
             <input type="text" id="txName" placeholder="e.g., Paycheck" aria-describedby="txNameError" required>
@@ -1200,226 +2286,11 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
             <button type="submit" class="primary" id="txSubmitBtn">Add Transaction</button>
         </div>
     </form>
-
-    <div class="form-grid" style="margin-top:8px;">
-        <div>
-            <label for="txSearch">Search</label>
-            <input type="text" id="txSearch" placeholder="Filter by name, tag, notes…">
-        </div>
-        <div>
-            <label for="txFilterKind">Filter by Kind</label>
-            <select id="txFilterKind">
-                <option value="">All</option>
-                <option value="income">Income</option>
-                <option value="expense">Expense</option>
-                <option value="transfer">Transfer</option>
-            </select>
-        </div>
-        <div>
-            <label for="txFilterCategory">Filter by Category</label>
-            <select id="txFilterCategory"><option value="">All</option></select>
-        </div>
     </div>
+</aside>
 
-    <div class="table-wrap">
-        <table id="txTable">
-            <thead><tr id="txHeaderRow"></tr></thead>
-            <tbody></tbody>
-        </table>
-    </div>
-    </div>
-</section>
-
-<!-- Data-quality warning strip; app.js fills it, :empty keeps it out of the flow otherwise. -->
-<div id="dataWarnings"></div>
-
-<!-- Forecast -->
-<section class="card" id="section-forecast">
-    <h2>
-        <span><span id="forecastTitle">12-Month Forecast</span> <span class="section-meta" id="forecastMeta"></span></span>
-        <button class="ghost icon" type="button" id="forecastToggle" aria-label="Toggle forecast section" aria-expanded="true" aria-controls="forecastBody"><span class="visually-hidden">Toggle forecast section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
-    </h2>
-    <div id="forecastBody">
-        <div class="forecast-wrap">
-            <table id="forecastTable">
-                <thead><tr id="forecastHeaderRow"></tr></thead>
-                <tbody></tbody>
-            </table>
-        </div>
-    </div>
-</section>
-
-<!-- Balances by account -->
-<section class="card" id="section-balances">
-    <h2>
-        <span>Balances by Account</span>
-        <button class="ghost icon" type="button" id="balancesToggle" aria-label="Toggle balances by account section" aria-expanded="true" aria-controls="balancesBody"><span class="visually-hidden">Toggle balances by account section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
-    </h2>
-    <div class="panel-body" id="balancesBody">
-        <p class="panel-note">Where your money actually sits — the projected end-of-month balance for each account, instead of one combined total.</p>
-        <div class="panel-mount" id="panelAccounts"></div>
-    </div>
-</section>
-
-<!-- Bills calendar -->
-<section class="card" id="section-calendar">
-    <h2>
-        <span>Bills Calendar</span>
-        <button class="ghost icon" type="button" id="calendarToggle" aria-label="Toggle bills calendar section" aria-expanded="true" aria-controls="calendarBody"><span class="visually-hidden">Toggle bills calendar section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
-    </h2>
-    <div class="panel-body" id="calendarBody">
-        <p class="panel-note">A day-by-day view of what lands when, so you can spot the crowded weeks before they arrive.</p>
-        <div class="panel-mount" id="panelCalendar"></div>
-    </div>
-</section>
-
-<!-- Charts -->
-<section class="card" id="section-charts">
-    <h2>
-        <span>Visualizations</span>
-        <button class="ghost icon" type="button" id="chartsToggle" aria-label="Toggle visualizations section" aria-expanded="true" aria-controls="chartsGrid"><span class="visually-hidden">Toggle visualizations section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
-    </h2>
-    <div class="charts-grid" id="chartsGrid">
-        <div class="chart-card" data-chart-card="monthly">
-            <div class="chart-head">
-                <h3>Monthly Income vs Expenses<span class="h-range" id="range-monthly"></span></h3>
-                <label class="visually-hidden" for="horizon-monthly">Horizon for Monthly Income vs Expenses</label>
-                <select class="chart-horizon" id="horizon-monthly" data-chart="monthly"></select>
-            </div>
-            <canvas id="chartMonthly" role="img" aria-label="Bar chart of forecast income against expenses for each month in the selected horizon."></canvas>
-        </div>
-        <div class="chart-card" data-chart-card="balance">
-            <div class="chart-head">
-                <h3>Running Balance<span class="h-range" id="range-balance"></span></h3>
-                <label class="visually-hidden" for="horizon-balance">Horizon for Running Balance</label>
-                <select class="chart-horizon" id="horizon-balance" data-chart="balance"></select>
-            </div>
-            <canvas id="chartBalance" role="img" aria-label="Line chart of the projected combined account balance at the end of each month."></canvas>
-        </div>
-        <div class="chart-card" data-chart-card="category">
-            <div class="chart-head">
-                <h3>Spend by Category<span class="h-range" id="range-category"></span></h3>
-                <label class="visually-hidden" for="horizon-category">Horizon for Spend by Category</label>
-                <select class="chart-horizon" id="horizon-category" data-chart="category"></select>
-            </div>
-            <canvas id="chartCategory" role="img" aria-label="Doughnut chart showing the share of total forecast spending taken by each expense category."></canvas>
-        </div>
-        <div class="chart-card" data-chart-card="trend">
-            <div class="chart-head">
-                <h3>Category Trend (stacked)<span class="h-range" id="range-trend"></span></h3>
-                <label class="visually-hidden" for="horizon-trend">Horizon for Category Trend</label>
-                <select class="chart-horizon" id="horizon-trend" data-chart="trend"></select>
-            </div>
-            <canvas id="chartTrend" role="img" aria-label="Stacked area chart of spending per category month by month across the selected horizon."></canvas>
-        </div>
-        <div class="chart-card" data-chart-card="top">
-            <div class="chart-head">
-                <h3>Top 10 Costs<span class="h-range" id="range-top"></span></h3>
-                <label class="visually-hidden" for="horizon-top">Horizon for Top 10 Costs</label>
-                <select class="chart-horizon" id="horizon-top" data-chart="top"></select>
-            </div>
-            <canvas id="chartTop" role="img" aria-label="Horizontal bar chart ranking the ten most expensive recurring transactions over the selected horizon."></canvas>
-        </div>
-        <div class="chart-card" data-chart-card="income">
-            <div class="chart-head">
-                <h3>Income Sources<span class="h-range" id="range-income"></span></h3>
-                <label class="visually-hidden" for="horizon-income">Horizon for Income Sources</label>
-                <select class="chart-horizon" id="horizon-income" data-chart="income"></select>
-            </div>
-            <canvas id="chartIncome" role="img" aria-label="Doughnut chart showing the share of total forecast income contributed by each income source."></canvas>
-        </div>
-    </div>
-</section>
-
-<!-- Insights -->
-<section class="card" id="section-insights">
-    <h2>Interesting Facts &amp; Insights</h2>
-    <div class="insights-grid" id="insightsGrid"></div>
-</section>
-
-<!-- Monthly check-in -->
-<section class="card" id="section-checkin">
-    <h2>
-        <span>Monthly Check-in</span>
-        <button class="ghost icon" type="button" id="checkinToggle" aria-label="Toggle monthly check-in section" aria-expanded="true" aria-controls="checkinBody"><span class="visually-hidden">Toggle monthly check-in section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
-    </h2>
-    <div class="panel-body" id="checkinBody">
-        <p class="panel-note">Record what an account really held at the end of a month, so the forecast keeps starting from a true balance.</p>
-        <div class="panel-mount" id="panelCheckin"></div>
-    </div>
-</section>
-
-<!-- Plan vs actual -->
-<section class="card" id="section-variance">
-    <h2>
-        <span>Plan vs Actual</span>
-        <button class="ghost icon" type="button" id="varianceToggle" aria-label="Toggle plan versus actual section" aria-expanded="true" aria-controls="varianceBody"><span class="visually-hidden">Toggle plan versus actual section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
-    </h2>
-    <div class="panel-body" id="varianceBody">
-        <p class="panel-note">Sets what you planned to spend against what you checked in, so you can see where the forecast drifts.</p>
-        <div class="panel-mount" id="panelVariance"></div>
-    </div>
-</section>
-
-<!-- Debt payoff -->
-<section class="card" id="section-debt">
-    <h2>
-        <span>Debt Payoff</span>
-        <button class="ghost icon" type="button" id="debtToggle" aria-label="Toggle debt payoff section" aria-expanded="true" aria-controls="debtBody"><span class="visually-hidden">Toggle debt payoff section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
-    </h2>
-    <div class="panel-body" id="debtBody">
-        <p class="panel-note">How long each balance takes to clear at the payment you are making now, and what the interest costs along the way.</p>
-        <div class="panel-mount" id="panelDebt"></div>
-    </div>
-</section>
-
-<!-- Savings goals -->
-<section class="card" id="section-goals">
-    <h2>
-        <span>Savings Goals</span>
-        <button class="ghost icon" type="button" id="goalsToggle" aria-label="Toggle savings goals section" aria-expanded="true" aria-controls="goalsBody"><span class="visually-hidden">Toggle savings goals section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
-    </h2>
-    <div class="panel-body" id="goalsBody">
-        <p class="panel-note">Set an amount you are saving towards and see the date you reach it at your current pace.</p>
-        <div class="panel-mount" id="panelGoals"></div>
-    </div>
-</section>
-
-<!-- Scenarios -->
-<section class="card" id="section-scenarios">
-    <h2>
-        <span>Scenarios</span>
-        <button class="ghost icon" type="button" id="scenariosToggle" aria-label="Toggle scenarios section" aria-expanded="true" aria-controls="scenariosBody"><span class="visually-hidden">Toggle scenarios section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
-    </h2>
-    <div class="panel-body" id="scenariosBody">
-        <p class="panel-note">Try a what-if — a raise, a rent rise, one bill gone — and compare it against your real numbers without changing them.</p>
-        <div class="panel-mount" id="panelScenarios"></div>
-    </div>
-</section>
-
-<!-- Backup and portability -->
-<section class="card" id="section-portability">
-    <h2>
-        <span>Backup &amp; Portability</span>
-        <button class="ghost icon" type="button" id="portabilityToggle" aria-label="Toggle backup and portability section" aria-expanded="true" aria-controls="portabilityBody"><span class="visually-hidden">Toggle backup and portability section</span><span class="toggle-glyph" aria-hidden="true">▾</span></button>
-    </h2>
-    <div class="panel-body" id="portabilityBody">
-        <p class="panel-note">Save a full copy of your data, bring one back, or carry it to another browser or device. Nothing leaves your machine.</p>
-        <div class="panel-mount" id="panelPortability"></div>
-    </div>
-</section>
-
-</main>
-
-<footer class="app-foot">
-    <p>
-        <a href="https://observation-deck.netlify.app/">Observation Deck</a>
-        &nbsp;·&nbsp;
-        <a href="https://github.com/00xJS/cashflow-compass" target="_blank" rel="noopener">GitHub</a>
-    </p>
-</footer>
-
-</div>
+<!-- Toasts. app.js writes into this region; it is fixed to the corner of the viewport. -->
+<div id="statusRegion" class="toast-stack" aria-live="polite" role="status"></div>
 
 <!-- Modal mount -->
 <div id="modalMount"></div>
@@ -1429,5 +2300,6 @@ a.guide-link:hover { text-decoration: underline; opacity: 1; }
 <script src="importers.js"></script>
 <script src="features.js"></script>
 <script src="portability.js"></script>
+<script src="shell.js"></script>
 </body>
 </html>

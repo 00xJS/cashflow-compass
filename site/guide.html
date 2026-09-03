@@ -10,6 +10,13 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧭</text></svg>">
 <title>Getting Started — Cashflow Compass</title>
 <style>
+@font-face {
+    font-family: "Inter";
+    src: url("vendor/InterVariable.woff2") format("woff2");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
 /* ── Observation Deck design tokens (mirrors index.html, dark only) ── */
 :root {
     color-scheme: dark;
@@ -44,7 +51,7 @@
     --btn-ink: #0a0d1c;
 
     /* type */
-    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", sans-serif;
+    --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
     --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 
     /* shape */
@@ -237,6 +244,20 @@ a.kicker:hover { color: var(--accent); }
     display: flex;
     align-items: center;
     gap: 12px;
+}
+kbd {
+    display: inline-block;
+    min-width: 18px;
+    padding: 1px 6px;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--card-chrome);
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    line-height: 1.5;
+    text-align: center;
+    color: var(--text);
 }
 .section-num {
     display: inline-flex;
@@ -598,7 +619,7 @@ a.kicker:hover { color: var(--accent); }
 <div class="toc">
     <h3>Contents</h3>
     <ol>
-        <li><a href="#what-is">What is Cashflow Compass?</a></li>
+        <li><a href="#what-is">What is Cashflow Compass?</a> · <a href="#finding-your-way">Finding your way around</a></li>
         <li><a href="#first-10">Your First 10 Minutes</a></li>
         <li><a href="#accounts">Accounts, Transfers &amp; Credit Cards</a></li>
         <li><a href="#categories">Categories</a></li>
@@ -669,6 +690,25 @@ a.kicker:hover { color: var(--accent); }
         <li><strong>Nothing to break.</strong> Aggregator connections rot: banks change their APIs, tokens expire, an institution drops off the supported list, and the tool that depended on it quietly stops being accurate. Typed-in numbers keep working forever.</li>
     </ul>
     <p>Opening a file <strong>you</strong> downloaded from your own bank is a completely different thing — no credentials, no third party, no live connection, nothing transmitted — and that is <a href="#import-actuals">built and described in section 10</a>. You download the file; you open it; the app reads it off your disk. Nobody is contacted at any point.</p>
+
+    <h3 id="finding-your-way">Finding your way around</h3>
+    <p>The app is six views, switched from the rail on the left (a tab bar along the bottom on a phone) or with the keys <kbd>1</kbd>–<kbd>6</kbd>:</p>
+    <ul>
+        <li><strong>Overview</strong> — the headline tiles (cash today, net worth, projected cash with a sparkline, average monthly net, savings rate, the next seven days, and the lowest point or first shortfall), then the six charts and the insight cards. Every tile and every insight card is a link to the section behind it.</li>
+        <li><strong>Plan</strong> — accounts, categories and transactions: everything the forecast is built from.</li>
+        <li><strong>Forecast</strong> — the month-by-month grid, balances by account, and the bills calendar.</li>
+        <li><strong>Reality</strong> — balance check-ins, plan vs actual, and the button that imports a file from your bank.</li>
+        <li><strong>Planning</strong> — the debt payoff planner, savings goals, and scenarios.</li>
+        <li><strong>Backup</strong> — plain, encrypted and live-file backups.</li>
+    </ul>
+    <p>The bar across the top holds the controls that apply everywhere: a search box, the <strong>Horizon</strong> and <strong>Currency</strong> selectors, the <strong>⬇ Export</strong> button, and a <strong>Data ▾</strong> menu with the imports, the JSON export, the sample data, this guide, and Reset. While a scenario is active a chip beside them names it, with a <em>Base plan</em> button to step back out.</p>
+    <p>Three habits are worth learning on day one:</p>
+    <ul>
+        <li><strong>Adding things</strong> — every list in Plan has a <strong>＋ Add</strong> button in its header that opens a form in a panel from the right. Save or press <kbd>Esc</kbd> and the panel goes away. Editing a row opens the same panel filled in.</li>
+        <li><strong>The ⋯ menu</strong> — every row has one, holding Edit, Pause, Duplicate and Delete (or Move, for a category). A transaction's name and amount can also be changed right in the table: double-click the cell, type, press <kbd>Enter</kbd>. Tick several rows and a bar appears to pause, resume or delete them together.</li>
+        <li><strong>The command palette</strong> — press <kbd>⌘K</kbd> (<kbd>Ctrl K</kbd> on Windows and Linux) or click the search box. Type a view, a section, an action, or the name of any account, category, transaction or scenario, and press <kbd>Enter</kbd>. It is the fastest way to reach anything.</li>
+    </ul>
+    <p>The first time the app opens it shows a three-step checklist on the Overview — an account, an income, a recurring expense — with a button on each step that opens the right form. It disappears on its own once the plan has the basics.</p>
 </section>
 
 <!-- ─────────────────────────────────────────── -->
@@ -684,14 +724,14 @@ a.kicker:hover { color: var(--accent); }
             <span class="step-num">1</span>
             <div class="step-body">
                 <h4>Add at least one account</h4>
-                <p>Go to the <strong>Accounts</strong> section and add a checking account with its current balance and today's date as the "as of" date. This is the starting point every projection builds from. Add savings, credit cards, or investments if you want the full net worth picture.</p>
+                <p>Open <strong>Plan</strong> and press <strong>＋ Add account</strong> in the Accounts header (or just press <kbd>a</kbd> anywhere). Add a checking account with its current balance and today's date as the "as of" date, then save — the panel closes on its own. This is the starting point every projection builds from. Add savings, credit cards, or investments if you want the full net worth picture.</p>
             </div>
         </div>
         <div class="step-card">
             <span class="step-num">2</span>
             <div class="step-body">
                 <h4>Add your income first</h4>
-                <p>In <strong>Transactions</strong>, add your paycheck as an <strong>Income</strong> transaction. If you're paid bi-weekly, select <em>Bi-weekly</em> — the app will automatically model the two "3-paycheck months" per year. Enter the amount as your <strong>net take-home pay</strong> after taxes, since everything else is post-tax too.</p>
+                <p>Press <strong>＋ Add transaction</strong> in the Transactions header (or <kbd>n</kbd>) and add your paycheck as an <strong>Income</strong> transaction. If you're paid bi-weekly, select <em>Bi-weekly</em> — the app will automatically model the two "3-paycheck months" per year. Enter the amount as your <strong>net take-home pay</strong> after taxes, since everything else is post-tax too.</p>
             </div>
         </div>
         <div class="step-card">
@@ -712,14 +752,14 @@ a.kicker:hover { color: var(--accent); }
             <span class="step-num">5</span>
             <div class="step-body">
                 <h4>Choose your horizon and review</h4>
-                <p>Use the dropdown at the top right to pick <strong>End of Year</strong>, <strong>12</strong>, <strong>18</strong>, <strong>24</strong>, or <strong>36 months</strong>. Scroll down to the forecast grid — red cells flag months where the balance goes negative. Check the Insight cards for your savings rate, biggest spending category, and projected end balance.</p>
+                <p>Use the <strong>Horizon</strong> control in the top bar to pick <strong>End of Year</strong>, <strong>12</strong>, <strong>18</strong>, <strong>24</strong>, or <strong>36 months</strong>. Open the <strong>Forecast</strong> view for the grid — red cells flag months where the balance goes negative — and the <strong>Overview</strong> for the headline tiles and the Insight cards: your savings rate, biggest spending category, and projected end balance. The rail on the left (a tab bar on a phone) switches views; keys <kbd>1</kbd>–<kbd>6</kbd> do the same.</p>
             </div>
         </div>
     </div>
 
     <div class="callout tip">
         <div class="callout-label">Tip — Start with the sample data</div>
-        The <strong>Load sample data</strong> button in the header (and in the welcome banner while the app is empty) sets up two accounts and 13 realistic transactions so you can see the full forecast immediately. Edit or delete any transaction to replace it with your own numbers.
+        <strong>Load sample data</strong> under the <strong>Data ▾</strong> menu in the top bar (and on the first-run checklist while the app is empty) sets up two accounts and 13 realistic transactions so you can see the full forecast immediately. Edit or delete any transaction to replace it with your own numbers.
     </div>
 
     <h3>The second ten minutes</h3>
@@ -842,8 +882,8 @@ a.kicker:hover { color: var(--accent); }
     </table>
 
     <h3>Adding, editing, and deleting</h3>
-    <p>The Categories panel has a small form: a name, a kind, and a color. Add a category and it's immediately available in the transaction form. Click the <strong>✎</strong> button on any row to load it back into the form and change it — the edit applies everywhere that category is used, including its color in every chart.</p>
-    <p>The <strong>✕</strong> button deletes a category. If any transactions are using it, the confirmation asks where to move them and reassigns them as part of the delete — nothing is ever quietly orphaned, and you don't have to go and re-file them by hand first. (The one case it refuses is deleting your last remaining category while transactions still need one; add a replacement first.) Deletes are undoable — see <a href="#settings">Settings &amp; Housekeeping</a>.</p>
+    <p><strong>＋ Add category</strong> in the section header opens a small form in a side panel: a name, a kind, and a color. Add a category and it's immediately available in the transaction form. Choose <strong>Edit</strong> from the <strong>⋯</strong> menu on any row to open it in the same panel and change it — the edit applies everywhere that category is used, including its color in every chart.</p>
+    <p><strong>Delete</strong>, in the same ⋯ menu, removes a category. If any transactions are using it, the confirmation asks where to move them and reassigns them as part of the delete — nothing is ever quietly orphaned, and you don't have to go and re-file them by hand first. (The one case it refuses is deleting your last remaining category while transactions still need one; add a replacement first.) Deletes are undoable — see <a href="#settings">Settings &amp; Housekeeping</a>.</p>
 
     <h3>Colors</h3>
     <p>The color you pick is the color that category gets in the Spend by Category doughnut, the Category Trend stack, and the Income Sources chart, and it's the dot beside the category name in the transaction list. Defaults are drawn from the Observation Deck palette and are already bright enough to read against the dark cards; if you add your own, pick something with similar punch.</p>
@@ -916,7 +956,7 @@ a.kicker:hover { color: var(--accent); }
     <p>For transactions that grow over time — rent renewals, cost-of-living raises, utility creep — set an escalation percentage. The amount steps up by that % on each anniversary of the start date, compounding: a 5% escalation on a $900 rent makes it $945 in year 2, $992 in year 3, and so on.</p>
 
     <h3>Pause / resume</h3>
-    <p>Use the pause toggle on any transaction to temporarily suspend it without deleting it. This is useful for gym memberships you've cancelled (but plan to restart), freelance income that stopped, or seasonal expenses that are off right now.</p>
+    <p>Choose <strong>Pause</strong> from the <strong>⋯</strong> menu on any transaction to suspend it without deleting it, and <strong>Resume</strong> from the same menu to bring it back. To pause several at once, tick their checkboxes and use the bar that appears above the table. This is useful for gym memberships you've cancelled (but plan to restart), freelance income that stopped, or seasonal expenses that are off right now.</p>
 
     <h3>Tags and notes</h3>
     <p>Tags let you group transactions that cut across categories — for example, <code>work-reimbursable</code>, <code>kid</code>, or <code>shared</code>. Notes are free-text reminders attached to a transaction ("Lease renews in August", "Cancel before trial ends").</p>
@@ -924,8 +964,17 @@ a.kicker:hover { color: var(--accent); }
     <h3>End date</h3>
     <p>Set an end date on any transaction to stop it from appearing in the forecast after a certain point. Perfect for a fixed-term loan payoff, a sublease, or a promotional subscription price that expires.</p>
 
+    <h3>Editing: the panel, the table, and the bulk bar</h3>
+    <p>There are three ways to change a transaction, and which one you reach for depends on how much is changing:</p>
+    <ul>
+        <li><strong>The panel</strong> — choose <strong>Edit</strong> from the row's <strong>⋯</strong> menu (or pick the transaction from the command palette). The full form opens from the right with every field filled in; save or press <kbd>Esc</kbd> to close it.</li>
+        <li><strong>In the table</strong> — double-click the <em>Name</em> or <em>Amount</em> cell (or focus it and press <kbd>Enter</kbd>), type the new value, and press <kbd>Enter</kbd>. <kbd>Esc</kbd> abandons it. Good for the quick "rent went up to $950" edit that doesn't deserve a form.</li>
+        <li><strong>The bulk bar</strong> — tick the checkbox on any rows (the one in the header ticks everything the filters are showing) and a bar appears offering <strong>Pause</strong>, <strong>Resume</strong> and <strong>Delete</strong> for all of them at once.</li>
+    </ul>
+    <p>Every one of these is a single undo step, so a slip is one click to reverse. <strong>Duplicate</strong>, also in the ⋯ menu, makes a copy named "(copy)" for quick variants.</p>
+
     <h3>Finding things: search, filters, and sorting</h3>
-    <p>A real budget gets to fifty or sixty transactions quickly. Three controls sit above the list to keep it navigable:</p>
+    <p>A real budget gets to fifty or sixty transactions quickly. Three controls sit above the list to keep it navigable (and <kbd>/</kbd> jumps straight to the search box from anywhere):</p>
     <ul>
         <li><strong>Search</strong> — type anything and the list narrows as you go. It matches on the transaction <em>name</em>, its <em>tags</em>, and its <em>notes</em>, so searching <code>kid</code> finds everything tagged for the kids and searching <code>renews</code> finds the notes you left yourself about renewal dates.</li>
         <li><strong>Kind filter</strong> — show only income, only expenses, or only transfers.</li>
@@ -1501,7 +1550,7 @@ a.kicker:hover { color: var(--accent); }
 
     <p>Your data lives in your browser's LocalStorage — it persists between visits on the same browser and device. But LocalStorage can be cleared. Export regularly to keep a portable backup.</p>
 
-    <h3>Excel (⬇ Excel / ⬆ Excel)</h3>
+    <h3>Excel (⬇ Export / Data ▾ → Import Excel workbook)</h3>
     <p>The Excel workbook contains five sheets:</p>
 
     <table class="guide-table">
@@ -1528,13 +1577,13 @@ a.kicker:hover { color: var(--accent); }
 
     <p>A file written by a <em>newer</em> version of the app is refused rather than imported, because loading it here would silently drop the fields this build doesn't know about and then save that loss back over your data. The message tells you which format version the file is and which one this copy understands.</p>
 
-    <h3>JSON ({ JSON } / ⇪ JSON)</h3>
+    <h3>JSON (Data ▾ → Export JSON / Import JSON file)</h3>
     <p>A lighter alternative to Excel — a single <code>.json</code> file containing all your state. Useful for quickly transferring data between browsers or devices, or sharing a budget template with someone else. Same replace-all import semantics apply.</p>
     <p><strong>JSON is the complete one.</strong> The workbook is designed to be readable and editable in Excel, so it carries accounts, categories, transactions and settings. The JSON file carries everything the app knows — including your <a href="#import-actuals">imported actuals</a>, your <a href="#checkins">check-in history</a> and your <a href="#scenarios">scenarios</a>. If you're moving to a new machine or keeping one true backup, make it the JSON.</p>
 
     <h3>Encrypted export (optional)</h3>
     <p>The <strong>Encrypted export</strong> block of the <strong>Backup &amp; Portability</strong> section writes a JSON export that's scrambled with a passphrase — worth doing when the file is headed for a shared computer, a USB stick, or a backup somewhere you don't fully control.</p>
-    <p>Type the passphrase twice, tick the box confirming you understand it can't be recovered, and press <strong>Export encrypted JSON</strong>. To open one again, use the ordinary <strong>⇪ JSON</strong> import button and pick the encrypted file — you're asked for the passphrase at that point.</p>
+    <p>Type the passphrase twice, tick the box confirming you understand it can't be recovered, and press <strong>Export encrypted JSON</strong>. To open one again, use the ordinary <strong>Import JSON file</strong> item under <strong>Data ▾</strong> and pick the encrypted file — you're asked for the passphrase at that point.</p>
     <p>The scrambling uses the browser's own encryption engine: the passphrase is stretched into a key with <strong>PBKDF2-SHA256</strong> (310,000 rounds), and the file is encrypted with <strong>AES-GCM</strong>. No server, no account, no key held anywhere — this is a lock on a file on your disk, applied on your machine.</p>
 
     <div class="callout warn">
@@ -1549,7 +1598,7 @@ a.kicker:hover { color: var(--accent); }
     </div>
 
     <h3>The export-age indicator</h3>
-    <p>The app keeps track of when you last exported and shows it in the header — <em>Exported today</em>, <em>Exported 12d ago</em>, or <em>Never exported</em>. If it's been more than a month and you have data worth losing, it says so and offers both export buttons on the spot. It's the one nag in the app, and it's there because a cleared browser takes an un-exported budget with it.</p>
+    <p>The app keeps track of when you last exported and shows it in the top bar — <em>Exported today</em>, <em>Exported 12d ago</em>, or <em>Never exported</em>. If it's been more than a month and you have data worth losing, it says so and offers both export buttons on the spot. It's the one nag in the app, and it's there because a cleared browser takes an un-exported budget with it.</p>
 
     <div class="callout tip">
         <div class="callout-label">Tip — Regular backups</div>
@@ -1609,7 +1658,7 @@ a.kicker:hover { color: var(--accent); }
 <section class="guide-section" id="settings">
     <h2><span class="section-num">19</span> Settings &amp; Housekeeping</h2>
 
-    <p>Everything the app can be configured with lives in the header bar. There is no settings page, no account, and nothing to sign in to.</p>
+    <p>Everything the app can be configured with lives in the top bar and its <strong>Data ▾</strong> menu. There is no settings page, no account, and nothing to sign in to.</p>
 
     <h3>Currency</h3>
     <p>The currency dropdown covers <strong>USD, EUR, GBP, CAD, AUD, and JPY</strong>, and it changes how every number in the app is <em>formatted</em> — the symbol, the separators, and the decimal places your locale expects. It does not convert anything: switching from USD to EUR turns <code>$1,234.56</code> into <code>€1,234.56</code>, not into today's exchange rate. Pick the currency you actually budget in and enter your amounts in that currency.</p>
@@ -1618,17 +1667,33 @@ a.kicker:hover { color: var(--accent); }
     <p>The horizon dropdown next to it sets the length of the forecast for the grid and every chart at once. <strong>End of Year</strong> is the months remaining in the current calendar year, which shrinks as the year goes on — useful in January, less so in December. Individual charts can override it; see the <a href="#charts">Charts</a> section.</p>
 
     <h3>Collapsible sections</h3>
-    <p>Every section on the page carries a <strong>▾</strong> toggle in its header — Categories and Transactions, the forecast and the charts, balances, the calendar, check-ins, variance, debt, goals, scenarios and the workbook panel. Collapse the ones you're not working on: with sixty transactions and six charts open at once, folding Transactions away to study the forecast grid makes a real difference.</p>
+    <p>Within a view, every section carries a <strong>▾</strong> toggle in its header — Categories and Transactions, the forecast and the charts, balances, the calendar, check-ins, variance, debt, goals, scenarios and the workbook panel. Collapse the ones you're not working on. Between views, use the rail on the left, the keys <kbd>1</kbd>–<kbd>6</kbd>, or the command palette.</p>
+
+    <h3>Keyboard shortcuts</h3>
+    <p>These work anywhere except while you're typing in a field. Press <kbd>?</kbd> in the app for the same list.</p>
+    <table class="guide-table">
+        <thead><tr><th>Key</th><th>What it does</th></tr></thead>
+        <tbody>
+            <tr><td><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></td><td>Open the command palette</td></tr>
+            <tr><td><kbd>1</kbd>–<kbd>6</kbd></td><td>Switch view: Overview, Plan, Forecast, Reality, Planning, Backup</td></tr>
+            <tr><td><kbd>n</kbd></td><td>New transaction</td></tr>
+            <tr><td><kbd>a</kbd></td><td>New account</td></tr>
+            <tr><td><kbd>/</kbd></td><td>Jump to the transaction search box</td></tr>
+            <tr><td><kbd>e</kbd></td><td>Export an Excel workbook</td></tr>
+            <tr><td><kbd>j</kbd></td><td>Export a JSON file</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Close a panel, menu or dialog, or cancel the edit in progress</td></tr>
+        </tbody>
+    </table>
 
     <h3>Where your data lives</h3>
     <p>Everything is saved to your browser's LocalStorage, automatically, a moment after each change. That storage is tied to <em>this browser on this device</em>: your budget won't follow you to a different browser, a different machine, or a private window, and clearing site data removes it. Moving between devices is what the JSON export — or <a href="#live-workbook">live workbook mode</a> — is for.</p>
     <p>That's the complete list of places your data goes: this browser, and any file you explicitly export or connect. There is no account, no server and no cloud copy, so there is nothing to sign into and nothing to delete anywhere else.</p>
 
     <h3>Undo</h3>
-    <p>Deleting an account, a category, or a transaction puts a message at the top of the app with an <strong>Undo</strong> button next to it. One click puts everything back exactly as it was, including any transactions that were reassigned as part of the delete. It's a single level of undo — the last destructive action, not a full history — so use it while the message is still on screen.</p>
+    <p>Deleting an account, a category, or a transaction — one at a time or several from the bulk bar — puts a message in the bottom corner of the screen with an <strong>Undo</strong> button next to it. So does an edit made in the table, and a bulk pause or resume. One click puts everything back exactly as it was, including any transactions that were reassigned as part of the delete. It's a single level of undo — the last destructive action, not a full history — so use it while the message is still on screen.</p>
 
     <h3>Reset</h3>
-    <p>The trash icon in the header clears your data after a confirmation dialog. It removes every account and every transaction and returns your settings to their defaults — and it <strong>restores the 19 default categories</strong>, including any you had renamed or deleted. It's a clean slate, not an empty one. Export first if there's anything you'd want back.</p>
+    <p><strong>Reset everything</strong>, at the bottom of the <strong>Data ▾</strong> menu, clears your data after a confirmation dialog. It removes every account and every transaction and returns your settings to their defaults — and it <strong>restores the 19 default categories</strong>, including any you had renamed or deleted. It's a clean slate, not an empty one. Export first if there's anything you'd want back.</p>
 
     <div class="callout warn">
         <div class="callout-label">Important — Export is your only backup</div>
@@ -1656,12 +1721,12 @@ a.kicker:hover { color: var(--accent); }
         <div class="tip-card">
             <span class="tip-icon">🔁</span>
             <h4>Duplicate to create variants</h4>
-            <p>Use the duplicate button on any transaction to quickly create a copy. Useful for modeling a second job, a spouse's income, or a what-if scenario — add it, check the forecast, then delete or pause it.</p>
+            <p>Choose <strong>Duplicate</strong> from the ⋯ menu on any transaction to quickly create a copy. Useful for modeling a second job, a spouse's income, or a what-if scenario — add it, check the forecast, then delete or pause it.</p>
         </div>
         <div class="tip-card">
             <span class="tip-icon">⏸️</span>
             <h4>Pause instead of delete</h4>
-            <p>If a subscription is on hold, a project income ended, or a seasonal expense is off, pause the transaction rather than deleting it. It disappears from the forecast but is there to resume with one click when circumstances change.</p>
+            <p>If a subscription is on hold, a project income ended, or a seasonal expense is off, choose <strong>Pause</strong> from its ⋯ menu rather than deleting it. It disappears from the forecast but is there to resume with one click when circumstances change.</p>
         </div>
         <div class="tip-card">
             <span class="tip-icon">🏷️</span>

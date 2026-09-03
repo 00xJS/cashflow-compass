@@ -4,6 +4,15 @@ These files are shipped unmodified so Cashflow Compass works offline and contact
 no third-party server at runtime. Both licences permit redistribution; the only
 obligation is this notice.
 
+## InterVariable.woff2 — Inter 4.x (variable)
+
+Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)
+Licensed under the SIL Open Font License, Version 1.1. Full text: https://github.com/rsms/inter/blob/master/LICENSE.txt
+
+Obtained from https://github.com/rsms/inter/raw/master/docs/font-files/InterVariable.woff2 — the
+project's own repository. The OFL permits bundling and redistribution; the font may not be sold
+on its own, and this notice must travel with it.
+
 ## chart.umd.min.js — Chart.js 4.4.4
 
 Copyright (c) 2014-2024 Chart.js Contributors
